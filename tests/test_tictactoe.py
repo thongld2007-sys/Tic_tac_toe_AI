@@ -140,6 +140,41 @@ def test_undo_reopens_finished_game() -> None:
     assert (0, 2) in state.legal_moves()
 
 
+def test_last_move_and_move_count_follow_play_and_undo() -> None:
+    state = TicTacToe()
+    assert state.last_move() is None
+    assert state.move_count() == 0
+
+    state.play((1, 1))
+    state.play((0, 2))
+    assert state.last_move() == (0, 2)
+    assert state.move_count() == 2
+
+    state.undo()
+    assert state.last_move() == (1, 1)
+    assert state.move_count() == 1
+
+    state.undo()
+    assert state.last_move() is None
+    assert state.move_count() == 0
+
+
+def test_rejected_move_does_not_change_last_move() -> None:
+    state = play_all([(1, 1)])
+    with pytest.raises(ValueError):
+        state.play((1, 1))
+    assert state.last_move() == (1, 1)
+    assert state.move_count() == 1
+
+
+def test_clone_keeps_last_move_and_move_count() -> None:
+    state = play_all([(0, 0), (2, 2)])
+    copy = state.clone()
+    copy.play((1, 1))
+    assert (copy.last_move(), copy.move_count()) == ((1, 1), 3)
+    assert (state.last_move(), state.move_count()) == ((2, 2), 2)
+
+
 def test_undo_without_moves_raises() -> None:
     with pytest.raises(ValueError):
         TicTacToe().undo()

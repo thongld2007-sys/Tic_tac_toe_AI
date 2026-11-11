@@ -79,6 +79,12 @@ class TicTacToe(GameState):
     def current_player(self) -> int:
         return self._player
 
+    def last_move(self) -> Move | None:
+        return self._history[-1] if self._history else None
+
+    def move_count(self) -> int:
+        return len(self._history)
+
     def hash(self) -> int:
         return self._board_key * 2 + (self._player == PLAYER_X)
 

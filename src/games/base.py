@@ -59,6 +59,14 @@ class GameState(ABC):
         """Người sắp đi: 1 (X) hoặc -1 (O)."""
 
     @abstractmethod
+    def last_move(self) -> Move | None:
+        """Nước vừa đánh gần nhất; None khi chưa có nước nào hoặc đã undo() hết."""
+
+    @abstractmethod
+    def move_count(self) -> int:
+        """Số nước đã đánh kể từ thế ban đầu; undo() làm giảm đi 1."""
+
+    @abstractmethod
     def hash(self) -> int:
         """Khóa của thế cờ, tính cả lượt đi. Hai thế giống nhau phải cho cùng một khóa."""
 

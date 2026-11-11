@@ -36,6 +36,12 @@ class FillGame(GameState):
     def current_player(self) -> int:
         return self._player
 
+    def last_move(self) -> Move | None:
+        return self._history[-1] if self._history else None
+
+    def move_count(self) -> int:
+        return len(self._history)
+
     def hash(self) -> int:
         return hash((self.board.tobytes(), self._player))
 
@@ -82,6 +88,25 @@ def test_play_alternates_players_and_undo_restores_state() -> None:
     assert np.array_equal(state.board, board_before)
     assert state.current_player() == PLAYER_X
     assert state.hash() == hash_before
+
+
+def test_last_move_and_move_count_follow_play_and_undo() -> None:
+    state = FillGame()
+    assert state.last_move() is None
+    assert state.move_count() == 0
+
+    state.play((0, 1))
+    state.play((1, 0))
+    assert state.last_move() == (1, 0)
+    assert state.move_count() == 2
+
+    state.undo()
+    assert state.last_move() == (0, 1)
+    assert state.move_count() == 1
+
+    state.undo()
+    assert state.last_move() is None
+    assert state.move_count() == 0
 
 
 def test_is_terminal_follows_winner() -> None:

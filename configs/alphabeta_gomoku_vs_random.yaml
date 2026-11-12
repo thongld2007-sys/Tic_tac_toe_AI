@@ -1,0 +1,20 @@
+# Kiểm chứng nghiệm thu P1.3b: Alpha-Beta caro (depth >= 3) đấu 200 ván với Random.
+# Chạy: python -m experiments.run configs/alphabeta_gomoku_vs_random.yaml
+name: alphabeta_gomoku_vs_random
+seed: 2026
+games: 200
+swap_first: true
+opening_plies: 2
+game:
+  type: gomoku
+  size: 9
+matchups:
+  - a:
+      type: alphabeta_gomoku
+      radius: 2
+      max_candidates: 16
+      budget:
+        depth: 3
+    b:
+      type: random
+

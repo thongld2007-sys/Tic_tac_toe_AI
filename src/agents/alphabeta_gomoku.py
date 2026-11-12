@@ -4,10 +4,19 @@ Chủ sở hữu: TV3.  Review: TV1.
 
 Các kỹ thuật tích hợp:
   1. Giới hạn nước ứng viên (`candidate_moves(radius)` + giới hạn `max_candidates`).
-  2. Phát hiện thắng/chặn tức thì (tạo 5 quân thắng ngay hoặc chặn nước thắng đối thủ).
+     Lưu ý: `max_candidates` (mặc định 16) là cắt tỉa sớm (forward pruning / beam width)
+     giữ lại tối đa `max_candidates` nước có điểm cục bộ cao nhất tại mỗi nút; muốn duyệt
+     đầy đủ mọi nước trong `candidate_moves` thì truyền `max_candidates=None`.
+  2. Phát hiện thắng/chặn tức thì (tạo `win_length` quân thắng ngay hoặc chặn nước thắng).
   3. Sắp xếp thứ tự nước đi (Move ordering): TT move -> Killer moves -> Điểm mẫu cục bộ.
   4. Tìm kiếm sâu dần (Iterative Deepening) tuân thủ ngân sách `Budget(depth, time_s)`.
   5. Bảng chuyển vị Zobrist (Transposition Table — TT) với cờ EXACT / LOWERBOUND / UPPERBOUND.
+
+Ghi chú thiết kế:
+  - Agent hoàn toàn tất định (không dùng nguồn ngẫu nhiên); khi cho hai agent tất định đấu
+    nhau trong runner cần đặt `opening_plies >= 2` để đa dạng hóa thế cờ mở đầu.
+  - Hàm lượng giá `evaluate()` ở nút lá được thiết kế cho luật chuẩn `win_length = 5`
+    (phần kiểm tra kết thúc ván và thắng/chặn tức thì vẫn đọc `state.win_length`).
 """
 
 from __future__ import annotations
@@ -18,10 +27,10 @@ from dataclasses import dataclass
 from typing import Any, Final
 
 from src.agents.base import Agent, Budget
-from src.eval.patterns import _WEIGHTS, FIVE, evaluate
+from src.eval.patterns import FIVE_SCORE, evaluate
 from src.games.base import DRAW, EMPTY, Board, GameState, Move
 
-WIN_SCORE: Final[float] = float(_WEIGHTS[FIVE])
+WIN_SCORE: Final[float] = FIVE_SCORE
 
 _EXACT: Final[int] = 0
 _LOWERBOUND: Final[int] = 1
@@ -333,7 +342,7 @@ class AlphaBetaGomoku(Agent):
         win_length: int,
         block_two_ends: bool,
     ) -> float:
-        if self._deadline is not None and (self._nodes & 63) == 0:
+        if self._deadline is not None and (self._nodes & 7) == 0:
             if time.perf_counter() >= self._deadline:
                 raise _SearchTimeout
 
@@ -348,6 +357,8 @@ class AlphaBetaGomoku(Agent):
             return win_val if winner == state.current_player() else -win_val
 
         if depth <= 0:
+            if self._deadline is not None and time.perf_counter() >= self._deadline:
+                raise _SearchTimeout
             return evaluate(state.board, state.current_player(), block_two_ends=block_two_ends)
 
         alpha_orig = alpha
@@ -546,7 +557,8 @@ class AlphaBetaGomoku(Agent):
 
         max_depth = budget_depth if budget_depth is not None else self.default_depth
         if budget_time_s is not None:
-            self._deadline = start_t + budget_time_s * 0.92
+            margin = min(budget_time_s * 0.88, max(0.001, budget_time_s - 0.02))
+            self._deadline = start_t + margin
             if budget_depth is None:
                 max_depth = max(self.default_depth, 6)
         else:

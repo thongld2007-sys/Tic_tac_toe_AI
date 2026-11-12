@@ -225,11 +225,11 @@ def test_depth_3_on_15x15_completes_under_one_second() -> None:
     assert agent.last_stats["time_s"] <= 1.0
 
 
-def test_wins_at_least_99_percent_against_random_in_200_games() -> None:
-    """Điều kiện xong P1.3b (2): Thắng Random >= 99% trong 200 ván (100 đi trước, 100 đi sau)."""
-    agent = AlphaBetaGomoku(default_depth=2, max_candidates=12)
+def test_wins_against_random_at_depth_3_in_20_games() -> None:
+    """Thắng Random 100% ở độ sâu 3 trong 20 ván (cấu hình 200 ván nằm ở configs/)."""
+    agent = AlphaBetaGomoku(default_depth=3, max_candidates=12)
     wins = 0
-    total_games = 200
+    total_games = 20
 
     for game_idx in range(total_games):
         rng_agent = RandomAgent(seed=10_000 + game_idx)
@@ -239,7 +239,7 @@ def test_wins_at_least_99_percent_against_random_in_200_games() -> None:
 
         while not state.is_terminal():
             if state.current_player() == ai_player:
-                move = agent.select_move(state, Budget(depth=2))
+                move = agent.select_move(state, Budget(depth=3))
             else:
                 move = rng_agent.select_move(state, Budget())
             state.play(move)

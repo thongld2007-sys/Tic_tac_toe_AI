@@ -166,8 +166,19 @@ def _build_alphabeta_gomoku(params: Mapping[str, Any], seed: int) -> Agent:
     return AlphaBetaGomoku(**params)
 
 
+MCTS_PARAMS = (
+    "c",
+    "selection",
+    "rollout",
+    "rollout_depth",
+    "use_candidates",
+    "candidate_radius",
+    "reuse_tree",
+)
+
+
 def _build_mcts(params: Mapping[str, Any], seed: int) -> Agent:
-    _check_params("agent mcts", params, ("c", "selection", "use_candidates", "candidate_radius"))
+    _check_params("agent mcts", params, MCTS_PARAMS)
     return MCTSAgent(seed=seed, **params)
 
 

@@ -19,9 +19,20 @@ Mỗi thành viên viết phần của mình trong các file `.tex` riêng biệ
 | `sections/06a_results_tv1.tex` | TV1 | P5.1a | VI-A. Kết quả T1, T3, F1, F2 (RQ1, RQ3, RQ4) |
 | `sections/06b_results_tv2.tex` | TV2 | P5.2a | VI-B. Kết quả T4, T5 và B2/B3 (RQ5) |
 | `sections/06c_results_tv3.tex` | TV3 | P5.3b | VI-C. Kết quả T2, T6, T7 (RQ2, RQ6) |
-| `sections/07_discussion.tex` | TV2 & TV3 | P5.2a, P5.3b | VII. Thảo luận (`N` vs `W/N`, Policy vs Value, liên hệ AlphaGo, hạn chế) |
+| `sections/07a_discussion_tv2.tex` | TV2 | P5.2a | VII-A. Thảo luận: chọn nước theo `N` so với `W/N` |
+| `sections/07b_discussion_tv3.tex` | TV3 | P5.3b | VII-B. Thảo luận: Policy và Value, liên hệ AlphaGo, hạn chế |
 | `sections/08_conclusion.tex` | TV3 | P5.3b | VIII. Kết luận |
 | `references.bib` | TV1 | P5.1b | Danh mục tài liệu tham khảo (BibTeX) |
+
+## Quy ước viết
+
+Theo đề bài của giảng viên:
+
+- Báo cáo theo form IEEE conference paper, viết bằng **tiếng Anh** (mặc định của đề bài), tối thiểu 4–5 trang.
+- Abstract không quá **200 từ**, gồm: bài toán, phương pháp, kết quả chính có số liệu, kết luận.
+- Tên tác giả viết không dấu, vì khung không nạp bộ mã font tiếng Việt.
+- Ghi chú trong ngoặc vuông in nghiêng `[TVn -- Pxx: ...]` là chỗ giữ phần chưa viết; xóa đi khi viết nội dung thật.
+- Bảng ánh xạ RQ1–RQ6 sang mã yêu cầu, bảng và hình nằm trong chú thích cuối `sections/01_introduction.tex`.
 
 ## Biên dịch trên Overleaf hoặc máy cá nhân
 

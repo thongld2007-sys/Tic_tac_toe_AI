@@ -1,9 +1,9 @@
-% Chủ sở hữu: TV2 (P5.2a) — Review: TV3
-\subsection{Tìm kiếm Cây Monte Carlo với UCT (MCTS-UCT)}
+% Owner: TV2 (P5.2a) -- Reviewer: TV3
+\subsection{Monte Carlo Tree Search with UCT}
 \label{subsec:mcts_uct}
 
-\textit{[Phần của TV2 -- P5.2a: Trình bày 4 pha của MCTS (Selection, Expansion, Simulation, Backpropagation với quy tắc đổi dấu theo góc nhìn người vừa đánh), công thức UCT:}
+\textit{[TV2 -- P5.2a: the four phases of MCTS (selection, expansion, simulation, and backpropagation with the sign flipped according to the player who just moved), the UCT formula}
 \[
-\text{UCT}(v_i) = \frac{W_i}{N_i} + c \sqrt{\frac{\ln N}{N_i}},
+\mathrm{UCT}(i) = \frac{W_i}{N_i} + c \sqrt{\frac{\ln N_p}{N_i}},
 \]
-\textit{mã giả (pseudocode), 3 tiêu chuẩn chọn nước đi cuối tại gốc (Robust Child $\arg\max N_i$, Max Child $\arg\max W_i/N_i$, Max-Robust), cùng các biến thể và cải tiến UCT (B2, B3).]}
+\textit{pseudocode, the final-move selection rules at the root, and the UCT variants and improvement (bonus B2, B3).]}

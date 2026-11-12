@@ -1,21 +1,26 @@
-% Chủ sở hữu: TV3 (P5.3a, P5.3b) — Review: TV1
-\section{Giới thiệu (Introduction)}
+% Owner: TV3 (P5.3a, P5.3b) -- Reviewer: TV1
+\section{Introduction}
 \label{sec:introduction}
 
-Các trò chơi hai người, tổng bằng không, thông tin hoàn hảo và tất định như Tic-Tac-Toe, Caro (Gomoku) hay Cờ tướng từ lâu đã là môi trường chuẩn mực để đánh giá các thuật toán lập kế hoạch và tìm kiếm đối kháng trong Trí tuệ Nhân tạo~\cite{knuth1975analysis,allis1994searching}. Trong khi thuật toán Minimax kết hợp cắt tỉa Alpha-Beta~\cite{knuth1975analysis} khai thác cấu trúc cây trò chơi theo chiều sâu cùng hàm lượng giá heuristic đặc thù miền, thì Tìm kiếm Cây Monte Carlo kết hợp giới hạn tin cậy trên cho cây (MCTS-UCT)~\cite{kocsis2006bandit,browne2012survey} tiếp cận bài toán qua việc lấy mẫu ngẫu nhiên có định hướng dựa trên bài toán máy đánh bạc nhiều tay (Multi-Armed Bandit)~\cite{auer2002finite}. Sự kết hợp giữa tìm kiếm cây và học biểu diễn chính sách/giá trị sau đó đã dẫn tới những bước đột phá lớn như AlphaGo~\cite{silver2016mastering}.
+Deterministic, two-player, zero-sum games with perfect information, such as Tic-Tac-Toe, Gomoku, and Xiangqi, have long served as standard testbeds for adversarial search and planning~\cite{knuth1975analysis,allis1994searching}. Minimax with alpha-beta pruning~\cite{knuth1975analysis} explores the game tree depth-first and relies on a domain-specific evaluation function, whereas Monte Carlo tree search with upper confidence bounds applied to trees (MCTS-UCT)~\cite{kocsis2006bandit,browne2012survey} estimates move values by guided random sampling, building on the multi-armed bandit problem~\cite{auer2002finite}. Combining tree search with learned policy and value functions later led to AlphaGo~\cite{silver2016mastering}.
 
-Tuy nhiên, khi chuyển từ không gian trạng thái nhỏ có thể giải vét cạn (Tic-Tac-Toe $3\times 3$) sang không gian trạng thái có hệ số phân nhánh lớn và nhiều bẫy chiến thuật dài hạn (Caro $9\times 9$, $15\times 15$), hiệu năng thực tế của mỗi họ thuật toán phụ thuộc chặt chẽ vào các quyết định thiết kế kỹ thuật: thứ tự duyệt nước đi, hàm lượng giá mẫu, hệ số khám phá $c$, tiêu chuẩn chọn nước đi tại gốc, và chất lượng của chính sách mô phỏng (rollout policy).
+Moving from a game that can be solved exhaustively ($3\times 3$ Tic-Tac-Toe) to one with a large branching factor and long tactical sequences (Gomoku on $9\times 9$ and $15\times 15$ boards) makes the practical strength of each algorithm depend on engineering choices: move ordering, the evaluation function, the exploration constant $c$, the rule for selecting the final move at the root, and the quality of the rollout policy.
 
-\subsection{Câu hỏi Nghiên cứu (Research Questions)}
+\subsection{Research Questions}
 \label{subsec:rqs}
 
-Để đánh giá định lượng và có kiểm chứng thống kê các yếu tố trên, báo cáo này tập trung trả lời sáu câu hỏi nghiên cứu (RQ1--RQ6) bám sát đặc tả thực nghiệm:
+This report answers six research questions.
 
 \begin{itemize}
-    \item \textbf{RQ1 (Cắt tỉa Alpha-Beta \& Sắp xếp nước trên $3\times 3$ --- R1.1, R1.2, Bảng T1):} Cắt tỉa Alpha-Beta với ba chế độ sắp xếp thứ tự nước đi (ngẫu nhiên, cố định theo ưu tiên tâm--góc--cạnh, và đảo ngược) giúp giảm tỷ lệ nút phải duyệt như thế nào so với Minimax thuần túy mà vẫn bảo toàn tuyệt đối giá trị tối ưu trên mọi thế cờ?
-    \item \textbf{RQ2 (Tối ưu hóa Alpha-Beta trên Caro --- R1.3, R1.4, Bảng T2):} Trên bàn Caro $n\times n$, việc kết hợp thu hẹp tập nước ứng viên (\texttt{candidate\_moves}), phát hiện thắng/chặn tức thì, sắp xếp nước theo hàm lượng giá mẫu, tìm kiếm sâu dần (Iterative Deepening) và bảng chuyển vị Zobrist (Transposition Table) cải thiện độ sâu tìm kiếm hiệu dụng và tỷ lệ thắng ra sao trong giới hạn thời gian $\le 1\text{ s}$/nước?
-    \item \textbf{RQ3 (Kiểm chứng tính ``Không thua'' của MCTS-UCT trên $3\times 3$ --- R2.8, Bảng T3):} Khi đối đầu với Minimax hoàn hảo trên toàn bộ cây phản ứng qua 20 seed độc lập, MCTS-UCT cần ngân sách mô phỏng tối thiểu $I^*$ bằng bao nhiêu để đạt tỷ lệ thua bằng $0\%$, và những thế cờ bẫy (trap states) nào khiến MCTS thất bại ở ngân sách thấp?
-    \item \textbf{RQ4 (Tương tác giữa Hệ số Khám phá $c$ và Ngân sách Mô phỏng --- R3, Hình F1, F2):} Hằng số khám phá $c$ trong công thức UCT tương tác với số lượng mô phỏng $I$ như thế nào đối với tỷ lệ thắng của MCTS-UCT trên cả Tic-Tac-Toe $3\times 3$ và Caro $9\times 9$?
-    \item \textbf{RQ5 (Tiêu chuẩn Chọn nước cuối và Biến thể UCT --- R4, B2, B3, Bảng T4, T5):} Ba tiêu chuẩn chọn nước đi cuối tại gốc (Robust Child $\arg\max N$, Max Child $\arg\max W/N$, và Max-Robust) cùng các biến thể công thức UCT khác biệt như thế nào về mặt thống kê và hành vi tại các thế cờ nhạy cảm?
-    \item \textbf{RQ6 (Chính sách Rollout L0--L4 và Đối đầu Alpha-Beta vs.\ MCTS --- R5, Bảng T6, T7):} Các chiến lược mô phỏng từ ngẫu nhiên đồng nhất (L0), thắng/chặn tức thì (L1), ưu tiên lân cận (L2), chọn mềm theo mẫu (L3) đến cắt sớm bằng hàm lượng giá (L4) đánh đổi giữa tốc độ mô phỏng (simulations/s) và chất lượng đánh giá như thế nào khi so sánh cùng số iteration và cùng ngân sách thời gian (bao gồm thế cờ bẫy E1), cũng như khi đối đầu trực tiếp với Alpha-Beta trên bàn Caro $15\times 15$?
+    \item \textbf{RQ1.} How much does alpha-beta pruning, under different move-ordering modes, reduce the number of visited nodes relative to plain Minimax on $3\times 3$ Tic-Tac-Toe while returning the same game value?
+    \item \textbf{RQ2.} On Gomoku, how do candidate-move restriction, immediate win/block detection, pattern-based move ordering, iterative deepening, and a transposition table affect the search depth and win rate of alpha-beta within one second per move?
+    \item \textbf{RQ3.} What is the smallest simulation budget $I^*$ at which MCTS-UCT never loses to perfect Minimax on $3\times 3$ Tic-Tac-Toe, and which positions make it fail below that budget?
+    \item \textbf{RQ4.} How does the exploration constant $c$ interact with the number of iterations in determining the win rate of MCTS-UCT?
+    \item \textbf{RQ5.} How do final-move selection rules (most visited versus highest $W/N$) and variants of the UCT formula differ in win rate and in behavior on tactical positions?
+    \item \textbf{RQ6.} How do rollout policies L0--L4 trade simulation speed for evaluation quality under equal iterations and under equal time, and how does the resulting MCTS compare with alpha-beta on $15\times 15$ Gomoku?
 \end{itemize}
+
+% Mapping to the group's requirement codes, tables and figures (internal note, not printed):
+%   RQ1: R1.1, R1.2, Table T1          RQ4: R3, Figures F1, F2
+%   RQ2: R1.3, R1.4, Table T2          RQ5: R4, B2, B3, Tables T4, T5
+%   RQ3: R2.8, Table T3                RQ6: R5, Tables T6, T7

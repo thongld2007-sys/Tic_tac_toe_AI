@@ -20,6 +20,18 @@ python -m ruff check .
 python -m pytest
 ```
 
+## Chạy thực nghiệm
+
+Mỗi thực nghiệm là một file YAML trong `configs/`. Runner cho các agent đấu nhau và ghi mỗi ván
+một dòng vào `experiments/results/<name>.csv`:
+
+```bash
+python -m experiments.run configs/smoke_random_3x3.yaml
+```
+
+Thêm `--workers N` để chọn số tiến trình và `--out file.csv` để đổi nơi ghi. Cách viết cấu hình
+và ý nghĩa từng cột CSV nằm ở đầu file [experiments/run.py](experiments/run.py).
+
 ## Cấu trúc thư mục
 
 ```

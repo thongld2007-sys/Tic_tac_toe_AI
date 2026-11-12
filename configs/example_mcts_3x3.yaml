@@ -1,0 +1,20 @@
+# Ví dụ bung tổ hợp: MCTS với 2 giá trị c × 2 mức iteration, đấu Random và Alpha-Beta trên 3×3.
+# 2 × 2 × 2 = 8 cặp đấu, mỗi cặp 20 ván. Dùng để thử runner, KHÔNG phải số liệu của báo cáo.
+#   python -m experiments.run configs/example_mcts_3x3.yaml
+name: example_mcts_3x3
+seed: 2026
+games: 20
+swap_first: true
+game:
+  type: tictactoe
+matchups:
+  - a:
+      type: mcts
+      c: [0.5, 1.4]
+      budget: {iterations: [100, 500]}
+    b: {type: random}
+  - a:
+      type: mcts
+      c: [0.5, 1.4]
+      budget: {iterations: [100, 500]}
+    b: {type: alphabeta, ordering: heuristic}

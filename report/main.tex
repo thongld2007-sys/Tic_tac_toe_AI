@@ -2,7 +2,7 @@
 \IEEEoverridecommandlockouts
 
 \usepackage[utf8]{inputenc}
-\usepackage[vietnamese]{babel}
+\usepackage[T1]{fontenc}
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{booktabs}
 \usepackage{graphicx}
@@ -16,13 +16,13 @@
     urlcolor=blue!70!black
 }
 
-\title{Phân tích Thực nghiệm Minimax, Cắt tỉa Alpha-Beta và MCTS-UCT trên Tic-Tac-Toe $3\times 3$ và Caro $n\times n$}
+\title{An Empirical Study of Minimax, Alpha-Beta Pruning, and MCTS-UCT on $3\times 3$ Tic-Tac-Toe and $n\times n$ Gomoku}
 
 \author{
-    \IEEEauthorblockN{Lê Đình Thông (TV1), Nguyễn Tiến Sĩ (TV2), Trần Ngọc Phúc (TV3)}
+    \IEEEauthorblockN{Le Dinh Thong, Nguyen Tien Si, Tran Ngoc Phuc}
     \IEEEauthorblockA{
-        Trường Đại học Công nghệ, Đại học Quốc gia Hà Nội (UET - VNU)\\
-        Bài tập lớn Trí tuệ Nhân tạo 2026--2027\\
+        VNU University of Engineering and Technology (VNU-UET), Hanoi, Vietnam\\
+        Artificial Intelligence course project, 2026--2027\\
         Email: \texttt{thongld20.07@gmail.com, nguyentiensi272007@gmail.com, 25020323@vnu.edu.vn}
     }
 }
@@ -34,14 +34,14 @@
 \input{sections/00_abstract}
 
 \begin{IEEEkeywords}
-Minimax, Alpha-Beta Pruning, Monte Carlo Tree Search, UCT, Tic-Tac-Toe, Gomoku, Caro, Rollout Policy, Heuristic Evaluation.
+Minimax, alpha-beta pruning, Monte Carlo tree search, UCT, Tic-Tac-Toe, Gomoku, rollout policy, heuristic evaluation.
 \end{IEEEkeywords}
 
 \input{sections/01_introduction}
 \input{sections/02_related_work}
 \input{sections/03_problem_formulation}
 
-\section{Phương pháp Đề xuất (Methodology)}
+\section{Methods}
 \label{sec:methodology}
 \input{sections/04a_alphabeta}
 \input{sections/04b_mcts_uct}
@@ -49,13 +49,13 @@ Minimax, Alpha-Beta Pruning, Monte Carlo Tree Search, UCT, Tic-Tac-Toe, Gomoku, 
 
 \input{sections/05_experimental_setup}
 
-\section{Kết quả Thực nghiệm (Experimental Results)}
+\section{Results}
 \label{sec:results}
 \input{sections/06a_results_tv1}
 \input{sections/06b_results_tv2}
 \input{sections/06c_results_tv3}
 
-\section{Thảo luận (Discussion)}
+\section{Discussion}
 \label{sec:discussion}
 \input{sections/07a_discussion_tv2}
 \input{sections/07b_discussion_tv3}

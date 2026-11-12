@@ -1,5 +1,5 @@
-% Chủ sở hữu: TV3 (P5.3b) — Review: TV1
-\subsection{Chính sách Mô phỏng (Rollout Policies L0--L4) và Cải tiến Mô phỏng}
+% Owner: TV3 (P5.3b) -- Reviewer: TV1
+\subsection{Rollout Policies}
 \label{subsec:rollout_policies}
 
-\textit{[Phần của TV3 -- P5.3b: Trình bày chi tiết 5 mức Rollout trên Caro: L0 (ngẫu nhiên đồng nhất trên toàn bàn), L1 (ưu tiên nước thắng ngay và chặn thắng 5 quân ngay), L2 (giới hạn tập ứng viên lân cận kết hợp L1), L3 (chọn mềm softmax theo điểm mẫu cục bộ), và L4 (cắt ngắn rollout ở độ sâu $d_{\text{cut}}$ và trả về giá trị chuẩn hóa $\tanh(\text{evaluate}(s)/\tau)$). Bổ sung mô tả tái sử dụng cây con và cải tiến mô phỏng B4 (nước bắt buộc mở rộng, song song hóa tại gốc).]}
+\textit{[TV3 -- P5.3b: the five rollout levels on Gomoku: L0 (uniformly random), L1 (play an immediate win or block an immediate loss), L2 (L1 restricted to candidate moves near existing stones), L3 (softmax over local pattern scores), and L4 (truncate the rollout at depth $d_{\mathrm{cut}}$ and return $\tanh(\mathrm{evaluate}(s)/\tau)$). Also describe subtree reuse and the simulation improvements (bonus B4).]}

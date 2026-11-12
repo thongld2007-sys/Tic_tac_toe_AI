@@ -24,6 +24,16 @@ Mỗi thành viên viết phần của mình trong các file `.tex` riêng biệ
 | `sections/08_conclusion.tex` | TV3 | P5.3b | VIII. Kết luận |
 | `references.bib` | TV1 | P5.1b | Danh mục tài liệu tham khảo (BibTeX) |
 
+## Quy ước viết
+
+Theo đề bài của giảng viên:
+
+- Báo cáo theo form IEEE conference paper, viết bằng **tiếng Anh** (mặc định của đề bài), tối thiểu 4–5 trang.
+- Abstract không quá **200 từ**, gồm: bài toán, phương pháp, kết quả chính có số liệu, kết luận.
+- Tên tác giả viết không dấu, vì khung không nạp bộ mã font tiếng Việt.
+- Ghi chú trong ngoặc vuông in nghiêng `[TVn -- Pxx: ...]` là chỗ giữ phần chưa viết; xóa đi khi viết nội dung thật.
+- Bảng ánh xạ RQ1–RQ6 sang mã yêu cầu, bảng và hình nằm trong chú thích cuối `sections/01_introduction.tex`.
+
 ## Biên dịch trên Overleaf hoặc máy cá nhân
 
 1. **Trên Overleaf**: Tải toàn bộ thư mục `report/` lên một project Overleaf mới (hoặc đồng bộ từ GitHub), chọn trình biên dịch **pdfLaTeX** và file gốc là `main.tex`.

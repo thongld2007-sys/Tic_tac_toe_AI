@@ -6,13 +6,17 @@ import math
 import random
 
 import pytest
+import yaml
 
+from experiments.run import build_agent, normalize_config, run_experiment
 from src.agents.base import Budget
 from src.agents.mcts import (
     DEFAULT_C,
     MCTSAgent,
     MCTSNode,
     default_rollout,
+    register_rollout,
+    select_final_child,
 )
 from src.agents.minimax import MinimaxAgent
 from src.games.base import DRAW, PLAYER_O, PLAYER_X
@@ -328,23 +332,50 @@ def test_mcts_draws_against_minimax_on_3x3() -> None:
 
 def test_mcts_invalid_parameters_and_terminal_state() -> None:
     """Kiểm tra bắt lỗi tham số không hợp lệ và khi gọi trên thế cờ đã kết thúc."""
-    with pytest.raises(ValueError, match="c phải >= 0"):
+    with pytest.raises(ValueError, match="c"):
         MCTSAgent(c=-0.1)
+    with pytest.raises(ValueError, match="c"):
+        MCTSAgent(c=True)
+    with pytest.raises(ValueError, match="c"):
+        MCTSAgent(c=float("nan"))
 
     with pytest.raises(ValueError, match="selection"):
         MCTSAgent(selection="invalid")
 
+    with pytest.raises(ValueError, match="use_candidates"):
+        MCTSAgent(use_candidates=1)  # type: ignore[arg-type]
+
     with pytest.raises(ValueError, match="candidate_radius"):
         MCTSAgent(candidate_radius=0)
+    with pytest.raises(ValueError, match="candidate_radius"):
+        MCTSAgent(candidate_radius=True)
+
+    with pytest.raises(ValueError, match="rollout"):
+        MCTSAgent(rollout="unknown_policy")
+
+    with pytest.raises(ValueError, match="rollout_depth"):
+        MCTSAgent(rollout_depth=0)
+    with pytest.raises(ValueError, match="rollout_depth"):
+        MCTSAgent(rollout_depth=True)
+
+    with pytest.raises(ValueError, match="reuse_tree"):
+        MCTSAgent(reuse_tree=1)  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="seed"):
+        MCTSAgent(seed=True)
 
     agent = MCTSAgent(seed=1)
     state = TicTacToe()
 
     with pytest.raises(ValueError, match="iterations"):
         agent.select_move(state, Budget(iterations=0))
+    with pytest.raises(ValueError, match="iterations"):
+        agent.select_move(state, Budget(iterations=True))
 
     with pytest.raises(ValueError, match="time_s"):
         agent.select_move(state, Budget(time_s=0.0))
+    with pytest.raises(ValueError, match="time_s"):
+        agent.select_move(state, Budget(time_s=True))
 
     # Đánh tới khi X thắng
     for mv in [(0, 0), (1, 0), (0, 1), (1, 1), (0, 2)]:
@@ -353,3 +384,91 @@ def test_mcts_invalid_parameters_and_terminal_state() -> None:
 
     with pytest.raises(ValueError, match="kết thúc"):
         agent.select_move(state, Budget(iterations=10))
+
+
+def test_mcts_all_r26_parameters_configurable_via_yaml() -> None:
+    """Tiêu chí P2.2b: Mọi tham số R2.6 của MCTS đều chỉnh và bung tổ hợp được qua YAML."""
+    yaml_text = """
+name: test_mcts_yaml_r26
+seed: 2026
+games: 2
+swap_first: true
+game:
+  type: gomoku
+  size: 5
+matchups:
+  - a:
+      type: mcts
+      c: [0.5, 1.4]
+      selection: [robust, max, max_robust]
+      rollout: l0
+      rollout_depth: 10
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: true
+      budget:
+        iterations: 30
+        time_s: 0.5
+    b:
+      type: random
+"""
+    cfg = normalize_config(yaml.safe_load(yaml_text))
+    assert len(cfg["matchups"]) == 2 * 3
+
+    first_spec = cfg["matchups"][0]["a"]
+    agent, budget = build_agent(first_spec, seed=99)
+    assert isinstance(agent, MCTSAgent)
+    assert agent.get_params() == {
+        "c": 0.5,
+        "selection": "robust",
+        "rollout": "l0",
+        "rollout_depth": 10,
+        "use_candidates": True,
+        "candidate_radius": 2,
+        "reuse_tree": True,
+        "seed": 99,
+    }
+    assert budget == Budget(iterations=30, depth=None, time_s=0.5)
+
+    rows = run_experiment(cfg, workers=1)
+    assert len(rows) == 6 * 2
+
+
+def test_mcts_tree_reuse_across_moves_and_reset() -> None:
+    """Khi bật reuse_tree=True, nhánh cây con khớp state.hash() được tái sử dụng ở lượt sau."""
+    state = TicTacToe()
+    agent = MCTSAgent(reuse_tree=True, seed=42)
+
+    m1 = agent.select_move(state, Budget(iterations=100))
+    assert agent.last_root is not None
+    child_after_m1 = next(ch for ch in agent.last_root.children if ch.move == m1)
+    visits_on_m1 = child_after_m1.N
+    assert visits_on_m1 > 0
+
+    # Đánh nước m1 của X, tới lượt O (cùng agent hoặc nhánh con trực tiếp)
+    state.play(m1)
+    agent.select_move(state, Budget(iterations=50))
+    assert agent.last_root is not None
+    # Tổng lượt thăm tại gốc mới phải bằng visits_on_m1 cũ + 50 vòng lặp mới
+    assert agent.last_root.N == visits_on_m1 + 50
+
+    # Khi gọi reset_tree() hoặc sang ván mới không khớp hash, cây được tạo mới
+    agent.reset_tree()
+    assert agent.last_root is None
+
+
+def test_mcts_custom_rollout_registration_and_rollout_depth() -> None:
+    """Kiểm tra đăng ký chính sách rollout tùy chỉnh và giới hạn rollout_depth."""
+    register_rollout("zero_eval", lambda state, rng: 0.0)
+    agent = MCTSAgent(rollout="zero_eval", rollout_depth=2, seed=7)
+    assert agent.rollout == "zero_eval"
+
+    state = make_position_e1()
+    move = agent.select_move(state, Budget(iterations=100))
+    assert move in state.legal_moves()
+
+    # select_final_child hàm độc lập kiểm tra lỗi đầu vào
+    assert agent.last_root is not None
+    assert select_final_child(agent.last_root, "robust").move in state.legal_moves()
+    with pytest.raises(ValueError, match="selection"):
+        select_final_child(agent.last_root, "unknown")

@@ -449,6 +449,8 @@ def test_mcts_tree_reuse_across_moves_and_reset() -> None:
     state.play(m1)
     agent.select_move(state, Budget(iterations=50))
     assert agent.last_root is not None
+    assert agent.last_root.parent is None
+    assert agent.last_root.move is None
     # Tổng lượt thăm tại gốc mới phải bằng visits_on_m1 cũ + 50 vòng lặp mới
     assert agent.last_root.N == visits_on_m1 + 50
 
@@ -458,17 +460,33 @@ def test_mcts_tree_reuse_across_moves_and_reset() -> None:
 
 
 def test_mcts_custom_rollout_registration_and_rollout_depth() -> None:
-    """Kiểm tra đăng ký chính sách rollout tùy chỉnh và giới hạn rollout_depth."""
-    register_rollout("zero_eval", lambda state, rng: 0.0)
-    agent = MCTSAgent(rollout="zero_eval", rollout_depth=2, seed=7)
-    assert agent.rollout == "zero_eval"
+    """Kiểm tra đăng ký chính sách rollout tùy chỉnh và truyền max_moves vào rollout."""
+    seen_max_moves: list[int | None] = []
+
+    def custom_with_depth(
+        state: TicTacToe,
+        rng: random.Random,
+        max_moves: int | None = None,
+    ) -> float:
+        seen_max_moves.append(max_moves)
+        return 0.0
+
+    register_rollout("custom_depth", custom_with_depth)  # type: ignore[arg-type]
+    agent_depth = MCTSAgent(rollout="custom_depth", rollout_depth=4, seed=7)
+    assert agent_depth.rollout == "custom_depth"
 
     state = make_position_e1()
-    move = agent.select_move(state, Budget(iterations=100))
+    move = agent_depth.select_move(state, Budget(iterations=20))
     assert move in state.legal_moves()
+    assert seen_max_moves and all(m == 4 for m in seen_max_moves)
+
+    # Hàm rollout 2 tham số (không có max_moves) vẫn hoạt động bình thường làm fallback
+    register_rollout("zero_eval", lambda s, rng: 0.0)
+    agent_two_arg = MCTSAgent(rollout="zero_eval", rollout_depth=2, seed=7)
+    assert agent_two_arg.select_move(state, Budget(iterations=20)) in state.legal_moves()
 
     # select_final_child hàm độc lập kiểm tra lỗi đầu vào
-    assert agent.last_root is not None
-    assert select_final_child(agent.last_root, "robust").move in state.legal_moves()
+    assert agent_two_arg.last_root is not None
+    assert select_final_child(agent_two_arg.last_root, "robust").move in state.legal_moves()
     with pytest.raises(ValueError, match="selection"):
-        select_final_child(agent.last_root, "unknown")
+        select_final_child(agent_two_arg.last_root, "unknown")

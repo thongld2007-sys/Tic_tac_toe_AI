@@ -32,6 +32,7 @@ Tham số hóa đầy đủ (R2.6 — chỉnh được qua YAML trong `experimen
 from __future__ import annotations
 
 import importlib
+import inspect
 import math
 import random
 import time
@@ -295,11 +296,16 @@ class MCTSAgent(Agent):
 
         chosen_rollout: str | RolloutFn = rollout_fn if rollout_fn is not None else rollout
         rollout_name, resolved_fn = resolve_rollout(chosen_rollout)
+        params = inspect.signature(resolved_fn).parameters
+        accepts_max_moves = "max_moves" in params or any(
+            p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()
+        )
 
         self.c = c_val
         self.selection = selection
         self.rollout = rollout_name
         self.rollout_fn = resolved_fn
+        self._rollout_accepts_max_moves = accepts_max_moves
         self.rollout_depth = rollout_depth
         self.use_candidates = use_candidates
         self.candidate_radius = candidate_radius
@@ -351,6 +357,7 @@ class MCTSAgent(Agent):
                 )
                 if existing_moves <= legal_set:
                     cand.parent = None
+                    cand.move = None
                     missing = [mv for mv in self._moves_for(state) if mv not in existing_moves]
                     if missing:
                         cand.untried_moves.extend(missing)
@@ -358,26 +365,12 @@ class MCTSAgent(Agent):
         return None
 
     def _run_rollout(self, state: GameState) -> float:
-        if self.rollout_depth is not None and self.rollout_fn is default_rollout:
-            return float(default_rollout(state, self._rng, max_moves=self.rollout_depth))
-        if self.rollout_depth is not None:
-            player_at_start = state.current_player()
-            start_count = state.move_count()
-            plies = 0
-            try:
-                while not state.is_terminal() and plies < self.rollout_depth:
-                    moves = self._moves_for(state)
-                    state.play(self._rng.choice(moves))
-                    plies += 1
-                if state.is_terminal():
-                    winner = state.winner()
-                    assert winner is not None
-                    return float(winner * player_at_start)
-                val_current = float(self.rollout_fn(state, self._rng))
-                return val_current if state.current_player() == player_at_start else -val_current
-            finally:
-                while state.move_count() > start_count:
-                    state.undo()
+        if self.rollout_depth is not None and self._rollout_accepts_max_moves:
+            return float(
+                self.rollout_fn(  # type: ignore[call-arg]
+                    state, self._rng, max_moves=self.rollout_depth
+                )
+            )
         return float(self.rollout_fn(state, self._rng))
 
     def _backpropagate(self, node: MCTSNode, value_for_node_player: float) -> None:

@@ -18,9 +18,7 @@ Hàm chính:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-
-import numpy as np
+from dataclasses import dataclass
 
 from src.games.base import Board
 
@@ -106,48 +104,45 @@ def _extract_line(board: Board, r: int, c: int, dr: int, dc: int) -> list[int]:
     return result
 
 
+def _iter_lines(board: Board) -> list[list[int]]:
+    """Trích xuất mọi đường (hàng, cột, chéo chính, chéo phụ) có độ dài >= 2 trong O(n^2)."""
+    n = board.shape[0]
+    if n < 2:
+        return []
+    lines: list[list[int]] = []
+    for r in range(n):
+        lines.append(board[r, :].tolist())
+    for c in range(n):
+        lines.append(board[:, c].tolist())
+    flipped = board[:, ::-1]
+    for offset in range(-(n - 2), n - 1):
+        lines.append(board.diagonal(offset).tolist())
+        lines.append(flipped.diagonal(offset).tolist())
+    return lines
+
+
 def _count_patterns_in_sequence(seq: list[int], player: int) -> PatternCount:
     """Đếm các mẫu cho `player` trong một dãy ô 1-D.
 
     Mã hoá: `player` → p, đối thủ hoặc biên → b, trống → 0.
-    Chúng ta duyệt mọi đoạn con liên tiếp có độ dài từ 2 đến 5.
+    Duyệt mọi đoạn quân `player` liên tiếp có độ dài từ 2 trở lên.
     """
     pc = PatternCount()
     p = player
-    # Thêm sentinel "biên ảo" (giá trị -player) vào hai đầu để xử lý nhất quán
-    # Thực ra ta sẽ kiểm tra ô lân cận khi phân tích cửa sổ
     n = len(seq)
-
-    def cell(i: int) -> int:
-        """Giá trị ô tại chỉ số i; trả về -player (biên) nếu nằm ngoài."""
-        if i < 0 or i >= n:
-            return -p  # coi như bị chặn
-        return seq[i]
-
-    # Duyệt mọi vị trí bắt đầu của chuỗi quân p liên tiếp
-    counted: set[tuple[int, int]] = set()  # tránh đếm trùng
 
     i = 0
     while i < n:
         if seq[i] != p:
             i += 1
             continue
-        # Tìm độ dài đoạn liên tiếp bắt đầu từ i
-        j = i
+        j = i + 1
         while j < n and seq[j] == p:
             j += 1
-        length = j - i  # số quân liên tiếp từ i đến j-1
-        key = (i, j)
-        if key in counted:
-            i = j
-            continue
-        counted.add(key)
+        length = j - i
 
-        left = cell(i - 1)   # ô ngay trước đoạn
-        right = cell(j)      # ô ngay sau đoạn
-
-        left_open = left == 0
-        right_open = right == 0
+        left_open = i > 0 and seq[i - 1] == 0
+        right_open = j < n and seq[j] == 0
 
         if length >= 5:
             pc.five += 1
@@ -178,40 +173,22 @@ def _count_patterns_in_sequence(seq: list[int], player: int) -> PatternCount:
 
 
 def count_patterns(board: Board, player: int) -> PatternCount:
-    """Đếm các mẫu trên toàn bàn theo góc nhìn của `player`.
+    """Đếm các mẫu trên toàn bàn theo góc nhìn của `player` trong thời gian O(n^2).
 
-    Duyệt qua tất cả hàng, cột và hai đường chéo.
-    Mỗi đường chỉ được duyệt một lần (ví dụ hướng (0,1) đại diện cho cả
-    hướng (0,-1) vì chúng ta lấy toàn bộ dãy từ đầu đến cuối).
+    Duyệt qua tất cả hàng, cột và hai đường chéo (mỗi đường đúng một lần).
     """
-    n = board.shape[0]
     total = PatternCount()
-    visited_lines: set[tuple[tuple[int, int], tuple[int, int]]] = set()
-
-    for r in range(n):
-        for c in range(n):
-            for dr, dc in _DIRECTIONS:
-                # Tính điểm đầu của đường
-                sr, sc = r, c
-                while 0 <= sr - dr < n and 0 <= sc - dc < n:
-                    sr -= dr
-                    sc -= dc
-                key = ((sr, sc), (dr, dc))
-                if key in visited_lines:
-                    continue
-                visited_lines.add(key)
-
-                seq = _extract_line(board, sr, sc, dr, dc)
-                if len(seq) < 2:
-                    continue
-                pc = _count_patterns_in_sequence(seq, player)
-                total.five += pc.five
-                total.open_four += pc.open_four
-                total.four += pc.four
-                total.open_three += pc.open_three
-                total.three += pc.three
-                total.open_two += pc.open_two
-                total.two += pc.two
+    for seq in _iter_lines(board):
+        if player not in seq:
+            continue
+        pc = _count_patterns_in_sequence(seq, player)
+        total.five += pc.five
+        total.open_four += pc.open_four
+        total.four += pc.four
+        total.open_three += pc.open_three
+        total.three += pc.three
+        total.open_two += pc.open_two
+        total.two += pc.two
 
     return total
 
@@ -220,7 +197,7 @@ def evaluate(board: Board, player: int) -> float:
     """Điểm heuristic của `player` tại bàn cờ hiện tại.
 
     Dương → lợi thế cho `player`, âm → bất lợi.
-    Trả về ±∞ khi một trong hai bên đã thắng.
+    Trả về ±_WEIGHTS[FIVE] khi một trong hai bên đã có 5 quân liên tiếp.
     """
     my = count_patterns(board, player)
     opp = count_patterns(board, -player)
@@ -231,11 +208,11 @@ def evaluate(board: Board, player: int) -> float:
     if opp.five > 0:
         return float(-_WEIGHTS[FIVE])
 
-    score = 0.0
-    for pattern, weight in _WEIGHTS.items():
-        if pattern == FIVE:
-            continue
-        score += weight * getattr(my, pattern.replace("-", "_"), 0)
-        score -= weight * getattr(opp, pattern.replace("-", "_"), 0)
-
-    return score
+    return float(
+        _WEIGHTS[OPEN_FOUR] * (my.open_four - opp.open_four)
+        + _WEIGHTS[FOUR] * (my.four - opp.four)
+        + _WEIGHTS[OPEN_THREE] * (my.open_three - opp.open_three)
+        + _WEIGHTS[THREE] * (my.three - opp.three)
+        + _WEIGHTS[OPEN_TWO] * (my.open_two - opp.open_two)
+        + _WEIGHTS[TWO] * (my.two - opp.two)
+    )

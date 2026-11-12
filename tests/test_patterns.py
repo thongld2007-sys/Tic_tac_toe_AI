@@ -9,7 +9,6 @@ trả về kết quả đúng. Chạy: pytest tests/test_patterns.py -v
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from src.eval.patterns import (
     FIVE,
@@ -19,7 +18,6 @@ from src.eval.patterns import (
     OPEN_TWO,
     THREE,
     TWO,
-    PatternCount,
     count_patterns,
     evaluate,
 )
@@ -29,7 +27,7 @@ from src.games.base import PLAYER_O, PLAYER_X
 # Hàm tiện ích
 # ---------------------------------------------------------------------------
 
-X, O, _ = PLAYER_X, PLAYER_O, 0  # alias ngắn gọn trong bảng
+X, O, _ = PLAYER_X, PLAYER_O, 0  # noqa: E741 — alias ngắn gọn trong bảng
 
 
 def board(rows: list[list[int]]) -> np.ndarray:
@@ -43,15 +41,17 @@ def board(rows: list[list[int]]) -> np.ndarray:
 
 
 def test_five_horizontal():
-    b = board([
-        [X, X, X, X, X, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-    ])
+    b = board(
+        [
+            [X, X, X, X, X, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+        ]
+    )
     pc = count_patterns(b, X)
     assert pc.five >= 1, "Phải nhận ra FIVE nằm ngang"
     assert evaluate(b, X) > 0
@@ -64,15 +64,17 @@ def test_five_horizontal():
 
 
 def test_five_vertical():
-    b = board([
-        [X, _, _, _, _, _, _],
-        [X, _, _, _, _, _, _],
-        [X, _, _, _, _, _, _],
-        [X, _, _, _, _, _, _],
-        [X, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-    ])
+    b = board(
+        [
+            [X, _, _, _, _, _, _],
+            [X, _, _, _, _, _, _],
+            [X, _, _, _, _, _, _],
+            [X, _, _, _, _, _, _],
+            [X, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+        ]
+    )
     pc = count_patterns(b, X)
     assert pc.five >= 1, "Phải nhận ra FIVE nằm dọc"
 
@@ -83,15 +85,17 @@ def test_five_vertical():
 
 
 def test_open_four():
-    b = board([
-        [_, X, X, X, X, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-    ])
+    b = board(
+        [
+            [_, X, X, X, X, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+        ]
+    )
     pc = count_patterns(b, X)
     assert pc.open_four >= 1, "Phải nhận ra OPEN_FOUR"
 
@@ -102,15 +106,17 @@ def test_open_four():
 
 
 def test_four_blocked_one_side():
-    b = board([
-        [O, X, X, X, X, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-    ])
+    b = board(
+        [
+            [O, X, X, X, X, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+        ]
+    )
     pc = count_patterns(b, X)
     assert pc.four >= 1, "XXXX bị chặn trái phải nhận ra FOUR"
     assert pc.open_four == 0, "Không phải OPEN_FOUR vì một đầu bị chặn"
@@ -122,15 +128,17 @@ def test_four_blocked_one_side():
 
 
 def test_open_three():
-    b = board([
-        [_, X, X, X, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-    ])
+    b = board(
+        [
+            [_, X, X, X, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+        ]
+    )
     pc = count_patterns(b, X)
     assert pc.open_three >= 1, "Phải nhận ra OPEN_THREE"
 
@@ -141,15 +149,17 @@ def test_open_three():
 
 
 def test_three_blocked():
-    b = board([
-        [O, X, X, X, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-    ])
+    b = board(
+        [
+            [O, X, X, X, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+        ]
+    )
     pc = count_patterns(b, X)
     assert pc.three >= 1, "XXX bị chặn một đầu phải là THREE"
     assert pc.open_three == 0
@@ -161,15 +171,17 @@ def test_three_blocked():
 
 
 def test_open_two():
-    b = board([
-        [_, X, X, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-    ])
+    b = board(
+        [
+            [_, X, X, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+        ]
+    )
     pc = count_patterns(b, X)
     assert pc.open_two >= 1, "Phải nhận ra OPEN_TWO"
 
@@ -208,13 +220,15 @@ def test_five_diagonal_anti():
 def test_empty_board():
     b = np.zeros((15, 15), dtype=np.int8)
     pc = count_patterns(b, X)
-    assert pc.five == 0
-    assert pc.open_four == 0
-    assert pc.four == 0
-    assert pc.open_three == 0
-    assert pc.three == 0
-    assert pc.open_two == 0
-    assert pc.two == 0
+    assert pc.as_dict() == {
+        FIVE: 0,
+        OPEN_FOUR: 0,
+        FOUR: 0,
+        OPEN_THREE: 0,
+        THREE: 0,
+        OPEN_TWO: 0,
+        TWO: 0,
+    }
     assert evaluate(b, X) == 0.0
 
 
@@ -224,21 +238,22 @@ def test_empty_board():
 
 
 def test_evaluate_symmetry():
-    """Nếu đổi X↔O trên bàn thì điểm cũng đổi dấu."""
-    b = board([
-        [_, X, X, X, _, _, _],
-        [_, _, _, _, _, _, _],
-        [O, O, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-        [_, _, _, _, _, _, _],
-    ])
+    """Nếu đổi X↔O trên bàn thì điểm cũng đổi dấu (hoặc tương đương góc nhìn đối thủ)."""
+    b = board(
+        [
+            [_, X, X, X, _, _, _],
+            [_, _, _, _, _, _, _],
+            [O, O, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+        ]
+    )
     score_x = evaluate(b, X)
-    b_flipped = -b
-    score_o = evaluate(b_flipped, X)
-    # điểm X trên bàn b == điểm X trên bàn lật (vì vai trò hoán đổi)
-    assert abs(score_x + score_o) < 1e-6 or True  # tương đối, không ép bằng nhau chính xác
+    score_o = evaluate(b, O)
+    assert abs(score_x + score_o) < 1e-6
+    assert abs(evaluate(-b, X) - score_o) < 1e-6
 
 
 # ---------------------------------------------------------------------------
@@ -252,3 +267,25 @@ def test_o_wins_negative_for_x():
         b[0, i] = O
     assert evaluate(b, X) < 0
     assert evaluate(b, O) > 0
+
+
+# ---------------------------------------------------------------------------
+# Thế 13: TWO (bị chặn một đầu) và mẫu bị chặn cả hai đầu (OXXXXO)
+# ---------------------------------------------------------------------------
+
+
+def test_two_blocked_and_dead_four():
+    b = board(
+        [
+            [O, X, X, _, _, _, _],
+            [O, X, X, X, X, O, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+            [_, _, _, _, _, _, _],
+        ]
+    )
+    pc = count_patterns(b, X)
+    assert pc.two >= 1, "OXX_ trên hàng 0 phải nhận ra TWO"
+    assert pc.four == 0 and pc.open_four == 0, "OXXXXO bị chặn 2 đầu không được tính là FOUR"

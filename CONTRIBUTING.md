@@ -12,7 +12,9 @@
 
 - Python ≥ 3.10. Import theo đường dẫn tuyệt đối từ gốc repo: `from src.games.base import GameState`.
 - Trước khi mở PR: `make lint` và `make test` phải pass.
-- Mỗi file mã nguồn `src/<gói>/<tên>.py` có file test `tests/test_<tên>.py`.
+- Mỗi file mã nguồn `src/<gói>/<tên>.py` có file test `tests/test_<tên>.py`. Các module được
+  kiểm chứng bằng cách đối chiếu với nhau có thể dùng chung một file test, đặt tên theo cả hai
+  (ví dụ `tests/test_minimax_alphabeta.py`).
 - Mọi nguồn ngẫu nhiên nhận `seed` hoặc `rng` từ bên ngoài, không dùng trạng thái ngẫu nhiên toàn cục.
 - Dòng tối đa 100 ký tự (ruff kiểm tra).
 

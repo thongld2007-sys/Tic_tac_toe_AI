@@ -32,6 +32,13 @@ python -m experiments.run configs/smoke_random_3x3.yaml
 Thêm `--workers N` để chọn số tiến trình và `--out file.csv` để đổi nơi ghi. Cách viết cấu hình
 và ý nghĩa từng cột CSV nằm ở đầu file [experiments/run.py](experiments/run.py).
 
+Kiểm chứng "MCTS không bao giờ thua" trên 3×3 (bảng T3 và ngưỡng I\*) có script riêng, ghi ba file
+`verify_never_lose*.csv` vào `experiments/results/`:
+
+```bash
+python -m experiments.verify_never_lose
+```
+
 ## Cấu trúc thư mục
 
 ```
@@ -51,6 +58,6 @@ Quy ước git, code và thực nghiệm: xem [CONTRIBUTING.md](CONTRIBUTING.md)
 
 | Thành viên | Mã việc |
 | --- | --- |
-| TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P3.1a |
-| TV2 | P1.2, P2.2a |
+| TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a |
+| TV2 | P1.2, P2.2a, P2.2b, P3.2a |
 | TV3 | P1.3a, P1.3b, P5.3a |

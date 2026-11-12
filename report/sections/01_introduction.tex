@@ -1,0 +1,26 @@
+% Owner: TV3 (P5.3a, P5.3b) -- Reviewer: TV1
+\section{Introduction}
+\label{sec:introduction}
+
+Deterministic, two-player, zero-sum games with perfect information, such as Tic-Tac-Toe, Gomoku, and Xiangqi, have long served as standard testbeds for adversarial search and planning~\cite{knuth1975analysis,allis1994searching}. Minimax with alpha-beta pruning~\cite{knuth1975analysis} explores the game tree depth-first and relies on a domain-specific evaluation function, whereas Monte Carlo tree search with upper confidence bounds applied to trees (MCTS-UCT)~\cite{kocsis2006bandit,browne2012survey} estimates move values by guided random sampling, building on the multi-armed bandit problem~\cite{auer2002finite}. Combining tree search with learned policy and value functions later led to AlphaGo~\cite{silver2016mastering}.
+
+Moving from a game that can be solved exhaustively ($3\times 3$ Tic-Tac-Toe) to one with a large branching factor and long tactical sequences (Gomoku on $9\times 9$ and $15\times 15$ boards) makes the practical strength of each algorithm depend on engineering choices: move ordering, the evaluation function, the exploration constant $c$, the rule for selecting the final move at the root, and the quality of the rollout policy.
+
+\subsection{Research Questions}
+\label{subsec:rqs}
+
+This report answers six research questions.
+
+\begin{itemize}
+    \item \textbf{RQ1.} How much does alpha-beta pruning, under different move-ordering modes, reduce the number of visited nodes relative to plain Minimax on $3\times 3$ Tic-Tac-Toe while returning the same game value?
+    \item \textbf{RQ2.} On Gomoku, how do candidate-move restriction, immediate win/block detection, pattern-based move ordering, iterative deepening, and a transposition table affect the search depth and win rate of alpha-beta within one second per move?
+    \item \textbf{RQ3.} What is the smallest simulation budget $I^*$ at which MCTS-UCT never loses to perfect Minimax on $3\times 3$ Tic-Tac-Toe, and which positions make it fail below that budget?
+    \item \textbf{RQ4.} How does the exploration constant $c$ interact with the number of iterations in determining the win rate of MCTS-UCT?
+    \item \textbf{RQ5.} How do final-move selection rules (most visited versus highest $W/N$) and variants of the UCT formula differ in win rate and in behavior on tactical positions?
+    \item \textbf{RQ6.} How do rollout policies L0--L4 trade simulation speed for evaluation quality under equal iterations and under equal time, and how does the resulting MCTS compare with alpha-beta on $15\times 15$ Gomoku?
+\end{itemize}
+
+% Mapping to the group's requirement codes, tables and figures (internal note, not printed):
+%   RQ1: R1.1, R1.2, Table T1          RQ4: R3, Figures F1, F2
+%   RQ2: R1.3, R1.4, Table T2          RQ5: R4, B2, B3, Tables T4, T5
+%   RQ3: R2.8, Table T3                RQ6: R5, Tables T6, T7

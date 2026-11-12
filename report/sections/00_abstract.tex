@@ -1,0 +1,6 @@
+% Owner: TV3 (P5.3b) -- Reviewer: TV1
+% The assignment limits the abstract to 200 words: problem, method, key numerical results, conclusion.
+\begin{abstract}
+We study three adversarial search algorithms---Minimax, alpha-beta pruning, and Monte Carlo tree search with UCT (MCTS-UCT)---on two deterministic, perfect-information, zero-sum games: $3\times 3$ Tic-Tac-Toe and $n\times n$ Gomoku (five in a row). On the $3\times 3$ board we measure how move ordering reduces the number of nodes visited by alpha-beta relative to plain Minimax, and we determine the smallest simulation budget $I^*$ at which MCTS-UCT never loses to a perfect Minimax opponent. On Gomoku we combine a pattern-based evaluation function with candidate-move restriction, iterative deepening, and a Zobrist transposition table for alpha-beta, and we compare five rollout policies (L0--L4) and several final-move selection rules for MCTS-UCT. We further examine how the exploration constant $c$ interacts with the simulation budget. All win rates are reported with 95\% Wilson confidence intervals.
+\textit{[TV3 -- P5.3b: add the key numerical results and the main conclusion once the experiments are finished.]}
+\end{abstract}

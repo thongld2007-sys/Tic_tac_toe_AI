@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import random
 import time
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,7 @@ from experiments.run import (
     ConfigError,
     agent_label,
     build_agent,
+    build_game,
     derive_seed,
     expand_agent,
     game_label,
@@ -108,8 +110,16 @@ def test_matchups_are_the_product_of_both_sides() -> None:
     [
         {"games": 0},
         {"games": "many"},
+        {"games": True},
+        {"games": 2.5},
+        {"seed": "abc"},
+        {"seed": True},
+        {"swap_first": "yes"},
+        {"swap_first": 1},
         {"opening_plies": -1},
+        {"opening_plies": False},
         {"workers": 0},
+        {"workers": True},
         {"matchups": []},
         {"matchups": [{"a": {"type": "random"}}]},
         {"matchups": [{"a": {"type": "random"}, "b": {"type": "nobody"}}]},
@@ -124,7 +134,7 @@ def test_matchups_are_the_product_of_both_sides() -> None:
     ],
 )
 def test_bad_config_is_rejected_before_running(overrides: dict[str, Any]) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ConfigError):
         config(**overrides)
 
 
@@ -273,6 +283,23 @@ def test_opening_plies_are_shared_by_each_swapped_pair() -> None:
     assert rows[0]["game"] == "gomoku7"
 
 
+def test_gomoku_opening_stays_near_the_centre() -> None:
+    """Nước mở đầu lấy từ candidate_moves(): quân đầu ở tâm, các quân sau quanh quân đã có."""
+    cfg = config(game={"type": "gomoku", "size": 15}, opening_plies=4)
+    for group in range(30):
+        state = build_game(cfg["game"])
+        rng = random.Random(derive_seed(cfg["seed"], 0, "opening", group))
+        for _ in range(4):
+            state.play(rng.choice(state.candidate_moves()))
+        stones = [(r, c) for r in range(15) for c in range(15) if state.board[r, c] != 0]
+        assert (7, 7) in stones
+        # 4 quân, mỗi quân cách một quân trước đó không quá 2 ô: không ra khỏi vùng quanh tâm.
+        assert all(1 <= r <= 13 and 1 <= c <= 13 for r, c in stones)
+
+    rows = [play_game(cfg, 0, i) for i in range(2)]
+    assert all(row["opening_plies"] == 4 for row in rows)
+
+
 def test_gomoku_game_can_be_played_to_the_end() -> None:
     cfg = config(game={"type": "gomoku", "size": 5, "block_two_ends": True}, games=3)
     rows = run_experiment(cfg, workers=1)
@@ -361,6 +388,39 @@ def test_cli_runs_200_random_games_in_under_a_minute(
     assert sum(row["first_player"] == "a" for row in rows) == 100
     assert {row["winner"] for row in rows} == {"a", "b", "draw"}
     assert "200" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("workers", ["0", "-1"])
+def test_cli_rejects_non_positive_workers(
+    workers: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = tmp_path / "never.csv"
+    smoke = str(REPO_ROOT / "configs" / "smoke_random_3x3.yaml")
+    assert main([smoke, "--workers", workers, "--out", str(out)]) == 2
+    assert "--workers" in capsys.readouterr().err
+    assert not out.exists()
+
+
+def test_run_experiment_rejects_non_positive_workers() -> None:
+    with pytest.raises(ValueError):
+        run_experiment(config(), workers=0)
+
+
+def test_cli_reports_bad_seed_as_config_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bad = tmp_path / "bad_seed.yaml"
+    lines = [
+        "name: x",
+        "seed: abc",
+        "game: {type: tictactoe}",
+        "matchups:",
+        "  - a: {type: random}",
+        "    b: {type: random}",
+    ]
+    bad.write_text("\n".join(lines), encoding="utf-8")
+    assert main([str(bad)]) == 2
+    assert "seed" in capsys.readouterr().err
 
 
 def test_cli_reports_bad_config(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

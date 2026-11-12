@@ -57,6 +57,7 @@ _WEIGHTS: dict[str, float] = {
     OPEN_TWO: 50,
     TWO: 10,
 }
+FIVE_SCORE: float = float(_WEIGHTS[FIVE])
 
 _WIN_LENGTH = 5
 

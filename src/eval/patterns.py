@@ -2,25 +2,34 @@
 
 Chủ sở hữu: TV3.  Review: TV1.
 
-Mô tả các mẫu cần đếm (theo góc nhìn của `player`):
-  - FIVE        : 5 quân liên tiếp → thắng ngay
-  - OPEN_FOUR   : _XXXX_ (cả hai đầu trống) → đe doạ kép, thắng gần chắc
-  - FOUR        : XXXX_ hoặc _XXXX (một đầu bị chặn) → phải chặn
-  - OPEN_THREE  : _XXX_ (cả hai đầu trống, có thể mở thành OPEN_FOUR)
-  - THREE       : _XXX (một đầu bị chặn)
-  - OPEN_TWO   : _XX_ (cả hai đầu trống)
-  - TWO         : XX_ hoặc _XX (một đầu bị chặn)
+Các mẫu, theo góc nhìn của `player` (X là quân của `player`, _ là ô trống):
+  - FIVE        : đã có 5 quân liên tiếp trở lên → thắng
+  - OPEN_FOUR   : có từ 2 ô trống mà đánh vào là thành FIVE (vd. _XXXX_) → không chặn được
+  - FOUR        : có đúng 1 ô như vậy (vd. OXXXX_, XXX_X, XX_XX) → đối thủ phải chặn ngay
+  - OPEN_THREE  : đánh thêm 1 quân thì thành OPEN_FOUR (vd. _XXX_ còn chỗ, _X_XX_)
+  - THREE       : đánh thêm 1 quân thì chỉ thành FOUR (vd. OXXX__)
+  - OPEN_TWO    : đánh thêm 2 quân thì thành OPEN_FOUR (vd. __XX__)
+  - TWO         : đánh thêm 2 quân thì chỉ thành FOUR (vd. OXX___)
+
+Mỗi mẫu được xác định bằng cách "đánh thử" thêm quân, nên mẫu đứt quãng (có một ô trống
+ở giữa) được xếp đúng mức, còn mẫu nằm trong khoảng không đủ 5 ô (vd. OXXX_O) không được
+tính vì không bao giờ thành FIVE.
+
+Luật chặn hai đầu (`block_two_ends=True`): dãy từ 5 quân trở lên bị quân đối thủ chặn ở cả
+hai đầu thì không thắng. Biên bàn cờ không tính là chặn. Mặc định là False, tức cứ đủ 5
+quân liên tiếp là thắng.
 
 Hàm chính:
-  count_patterns(board, player) -> PatternCount
-  evaluate(board, player) -> float          # điểm theo góc nhìn của `player`
+  count_patterns(board, player, block_two_ends=False) -> PatternCount
+  evaluate(board, player, block_two_ends=False) -> float   # điểm theo góc nhìn của `player`
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import cache, lru_cache
 
-from src.games.base import Board
+from src.games.base import PLAYER_O, PLAYER_X, Board
 
 # ---------------------------------------------------------------------------
 # Hằng số
@@ -34,6 +43,10 @@ THREE = "three"
 OPEN_TWO = "open_two"
 TWO = "two"
 
+# Thứ tự từ mạnh đến yếu; chỉ số trong tuple này là "mức" của mẫu.
+_LEVELS = (FIVE, OPEN_FOUR, FOUR, OPEN_THREE, THREE, OPEN_TWO, TWO)
+_NO_PATTERN = (0,) * len(_LEVELS)
+
 # Trọng số cho từng mẫu (theo góc nhìn của người được đánh giá)
 _WEIGHTS: dict[str, float] = {
     FIVE: 1_000_000,
@@ -45,8 +58,7 @@ _WEIGHTS: dict[str, float] = {
     TWO: 10,
 }
 
-# 4 hướng: (dr, dc)
-_DIRECTIONS = [(0, 1), (1, 0), (1, 1), (1, -1)]
+_WIN_LENGTH = 5
 
 
 # ---------------------------------------------------------------------------
@@ -81,90 +93,187 @@ class PatternCount:
 # ---------------------------------------------------------------------------
 # Hàm nội bộ
 # ---------------------------------------------------------------------------
+#
+# Một "đoạn" là dãy ô liên tiếp trên một đường, chỉ gồm quân của người đang xét (1) và
+# ô trống (0), kẹp giữa hai quân đối thủ hoặc biên bàn. `closed` là True khi luật chặn
+# hai đầu đang bật và cả hai đầu của đoạn đều là quân đối thủ: khi đó dãy quân phủ kín
+# cả đoạn không được tính là thắng.
 
 
-def _extract_line(board: Board, r: int, c: int, dr: int, dc: int) -> list[int]:
-    """Trả về dãy giá trị ô trên một đường đi qua (r, c) theo hướng (dr, dc).
+def _has_five(cells: list[int], closed: bool) -> bool:
+    """Đoạn đã có dãy từ 5 quân liên tiếp trở lên (và dãy đó hợp lệ theo luật) hay chưa."""
+    n = len(cells)
+    run = 0
+    for i in range(n + 1):
+        if i < n and cells[i]:
+            run += 1
+            continue
+        if run >= _WIN_LENGTH and not (closed and run == n):
+            return True
+        run = 0
+    return False
 
-    Dãy được cắt tại biên bàn cờ, bao gồm tất cả ô trên đường đó.
-    Trả về từ ô đầu tiên đến ô cuối cùng trên đường.
-    """
+
+def _winning_cells(cells: list[int], closed: bool) -> int:
+    """Số ô trống mà đánh vào thì tạo ngay dãy từ 5 quân trở lên hợp lệ."""
+    n = len(cells)
+    count = 0
+    for i in range(n):
+        if cells[i]:
+            continue
+        start = i
+        while start > 0 and cells[start - 1]:
+            start -= 1
+        end = i
+        while end < n - 1 and cells[end + 1]:
+            end += 1
+        length = end - start + 1
+        if length >= _WIN_LENGTH and not (closed and length == n):
+            count += 1
+    return count
+
+
+def _level_from_winning_cells(count: int, open_level: int) -> int | None:
+    """Từ 2 ô thắng trở lên là mức "mở", đúng 1 ô là mức ngay dưới, 0 ô là không có."""
+    if count >= 2:
+        return open_level
+    if count == 1:
+        return open_level + 1
+    return None
+
+
+@cache
+def _classify_group(cells: tuple[int, ...], closed: bool) -> int | None:
+    """Mức (chỉ số trong _LEVELS) của một cụm quân nằm trong `cells`, None nếu không có mẫu."""
+    n = len(cells)
+    if n < _WIN_LENGTH:
+        return None
+    buf = list(cells)
+    if _has_five(buf, closed):
+        return _LEVELS.index(FIVE)
+
+    level = _level_from_winning_cells(_winning_cells(buf, closed), _LEVELS.index(OPEN_FOUR))
+    if level is not None:
+        return level
+
+    first = cells.index(1)
+    last = n - 1 - cells[::-1].index(1)
+
+    def nearby_empty(lo: int, hi: int) -> list[int]:
+        return [i for i in range(max(0, lo - 2), min(n, hi + 3)) if not buf[i]]
+
+    # Đánh thử thêm 1 quân.
+    best = 0
+    for i in nearby_empty(first, last):
+        buf[i] = 1
+        best = max(best, _winning_cells(buf, closed))
+        buf[i] = 0
+    level = _level_from_winning_cells(best, _LEVELS.index(OPEN_THREE))
+    if level is not None:
+        return level
+
+    # Đánh thử thêm 2 quân.
+    best = 0
+    for i in nearby_empty(first, last):
+        buf[i] = 1
+        for j in nearby_empty(min(first, i), max(last, i)):
+            buf[j] = 1
+            best = max(best, _winning_cells(buf, closed))
+            buf[j] = 0
+        buf[i] = 0
+    return _level_from_winning_cells(best, _LEVELS.index(OPEN_TWO))
+
+
+@cache
+def _classify_segment(
+    cells: tuple[int, ...], left_blocked: bool, right_blocked: bool
+) -> tuple[int, ...]:
+    """Đếm mẫu trong một đoạn. `left_blocked`/`right_blocked`: đầu đó bị đối thủ chặn theo luật."""
+    n = len(cells)
+    stones = [i for i, value in enumerate(cells) if value]
+    if n < _WIN_LENGTH or not stones:
+        return _NO_PATTERN
+
+    # Tách thành các cụm: hai quân cách nhau quá 1 ô trống thì thuộc hai cụm khác nhau.
+    groups: list[list[int]] = [[stones[0]]]
+    for i in stones[1:]:
+        if i - groups[-1][-1] > 2:
+            groups.append([i])
+        else:
+            groups[-1].append(i)
+
+    counts = [0] * len(_LEVELS)
+    for group in groups:
+        # Chỉ giữ cụm đang xét và tối đa 5 ô mỗi bên: đủ cho mọi phép đánh thử ở trên,
+        # và làm cho cùng một hình dạng ở các vị trí khác nhau dùng chung kết quả đã nhớ.
+        lo = max(0, group[0] - _WIN_LENGTH)
+        hi = min(n, group[-1] + _WIN_LENGTH + 1)
+        window = [0] * (hi - lo)
+        for i in group:
+            window[i - lo] = 1
+        closed = left_blocked and right_blocked and lo == 0 and hi == n
+        level = _classify_group(tuple(window), closed)
+        if level is not None:
+            counts[level] += 1
+    return tuple(counts)
+
+
+@lru_cache(maxsize=200_000)
+def _count_line(
+    line: tuple[int, ...], block_two_ends: bool
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Đếm mẫu trên một đường cho cả hai bên: (của PLAYER_X, của PLAYER_O)."""
+    n = len(line)
+    result = []
+    for player in (PLAYER_X, PLAYER_O):
+        counts = [0] * len(_LEVELS)
+        if player in line:
+            start = 0
+            for i in range(n + 1):
+                if i < n and line[i] != -player:
+                    continue
+                # line[start:i] là một đoạn; hai đầu là quân đối thủ hoặc biên bàn.
+                if i - start >= _WIN_LENGTH:
+                    cells = tuple(1 if value == player else 0 for value in line[start:i])
+                    found = _classify_segment(
+                        cells, block_two_ends and start > 0, block_two_ends and i < n
+                    )
+                    for level, amount in enumerate(found):
+                        counts[level] += amount
+                start = i + 1
+        result.append(tuple(counts))
+    return result[0], result[1]
+
+
+def _iter_lines(board: Board) -> list[tuple[int, ...]]:
+    """Mọi hàng, cột và đường chéo đủ dài để chứa 5 quân, mỗi đường đúng một lần."""
     n = board.shape[0]
-    # Tìm điểm bắt đầu (lùi ngược hướng đến biên)
-    sr, sc = r, c
-    while 0 <= sr - dr < n and 0 <= sc - dc < n:
-        sr -= dr
-        sc -= dc
-    result: list[int] = []
-    rr, cc = sr, sc
-    while 0 <= rr < n and 0 <= cc < n:
-        result.append(int(board[rr, cc]))
-        rr += dr
-        cc += dc
-    return result
-
-
-def _iter_lines(board: Board) -> list[list[int]]:
-    """Trích xuất mọi đường (hàng, cột, chéo chính, chéo phụ) có độ dài >= 2 trong O(n^2)."""
-    n = board.shape[0]
-    if n < 2:
-        return []
-    lines: list[list[int]] = []
-    for r in range(n):
-        lines.append(board[r, :].tolist())
-    for c in range(n):
-        lines.append(board[:, c].tolist())
+    lines = [tuple(row) for row in board.tolist()]
+    lines += [tuple(column) for column in board.T.tolist()]
     flipped = board[:, ::-1]
-    for offset in range(-(n - 2), n - 1):
-        lines.append(board.diagonal(offset).tolist())
-        lines.append(flipped.diagonal(offset).tolist())
+    for offset in range(-(n - _WIN_LENGTH), n - _WIN_LENGTH + 1):
+        lines.append(tuple(board.diagonal(offset).tolist()))
+        lines.append(tuple(flipped.diagonal(offset).tolist()))
     return lines
 
 
-def _count_patterns_in_sequence(seq: list[int], player: int) -> PatternCount:
-    """Đếm các mẫu cho `player` trong một dãy ô 1-D.
-
-    Mã hoá: `player` → p, đối thủ hoặc biên → b, trống → 0.
-    Duyệt mọi đoạn quân `player` liên tiếp có độ dài từ 2 trở lên.
-    """
-    pc = PatternCount()
-    p = player
-    n = len(seq)
-
-    i = 0
-    while i < n:
-        if seq[i] != p:
-            i += 1
+def _count_both(board: Board, block_two_ends: bool) -> tuple[list[int], list[int]]:
+    """Quét bàn một lần, trả về số mẫu theo mức của (PLAYER_X, PLAYER_O)."""
+    totals_x = [0] * len(_LEVELS)
+    totals_o = [0] * len(_LEVELS)
+    for line in _iter_lines(board):
+        if not any(line):
             continue
-        j = i + 1
-        while j < n and seq[j] == p:
-            j += 1
-        length = j - i
+        counts_x, counts_o = _count_line(line, block_two_ends)
+        for level in range(len(_LEVELS)):
+            totals_x[level] += counts_x[level]
+            totals_o[level] += counts_o[level]
+    return totals_x, totals_o
 
-        left_open = i > 0 and seq[i - 1] == 0
-        right_open = j < n and seq[j] == 0
 
-        if length >= 5:
-            pc.five += 1
-        elif length == 4:
-            if left_open and right_open:
-                pc.open_four += 1
-            elif left_open or right_open:
-                pc.four += 1
-        elif length == 3:
-            if left_open and right_open:
-                pc.open_three += 1
-            elif left_open or right_open:
-                pc.three += 1
-        elif length == 2:
-            if left_open and right_open:
-                pc.open_two += 1
-            elif left_open or right_open:
-                pc.two += 1
-
-        i = j
-
-    return pc
+def _check_player(player: int) -> None:
+    if player not in (PLAYER_X, PLAYER_O):
+        raise ValueError(f"player phải là {PLAYER_X} hoặc {PLAYER_O}, nhận được {player!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -172,47 +281,29 @@ def _count_patterns_in_sequence(seq: list[int], player: int) -> PatternCount:
 # ---------------------------------------------------------------------------
 
 
-def count_patterns(board: Board, player: int) -> PatternCount:
-    """Đếm các mẫu trên toàn bàn theo góc nhìn của `player` trong thời gian O(n^2).
-
-    Duyệt qua tất cả hàng, cột và hai đường chéo (mỗi đường đúng một lần).
-    """
-    total = PatternCount()
-    for seq in _iter_lines(board):
-        if player not in seq:
-            continue
-        pc = _count_patterns_in_sequence(seq, player)
-        total.five += pc.five
-        total.open_four += pc.open_four
-        total.four += pc.four
-        total.open_three += pc.open_three
-        total.three += pc.three
-        total.open_two += pc.open_two
-        total.two += pc.two
-
-    return total
+def count_patterns(board: Board, player: int, block_two_ends: bool = False) -> PatternCount:
+    """Đếm các mẫu trên toàn bàn theo góc nhìn của `player`."""
+    _check_player(player)
+    totals_x, totals_o = _count_both(board, block_two_ends)
+    return PatternCount(*(totals_x if player == PLAYER_X else totals_o))
 
 
-def evaluate(board: Board, player: int) -> float:
+def evaluate(board: Board, player: int, block_two_ends: bool = False) -> float:
     """Điểm heuristic của `player` tại bàn cờ hiện tại.
 
     Dương → lợi thế cho `player`, âm → bất lợi.
-    Trả về ±_WEIGHTS[FIVE] khi một trong hai bên đã có 5 quân liên tiếp.
+    Trả về ±_WEIGHTS[FIVE] khi một trong hai bên đã có FIVE.
     """
-    my = count_patterns(board, player)
-    opp = count_patterns(board, -player)
+    _check_player(player)
+    totals_x, totals_o = _count_both(board, block_two_ends)
+    mine, theirs = (totals_x, totals_o) if player == PLAYER_X else (totals_o, totals_x)
 
-    # Nếu đã có FIVE thì thắng/thua rõ ràng
-    if my.five > 0:
+    five = _LEVELS.index(FIVE)
+    if mine[five] > 0:
         return float(_WEIGHTS[FIVE])
-    if opp.five > 0:
+    if theirs[five] > 0:
         return float(-_WEIGHTS[FIVE])
 
     return float(
-        _WEIGHTS[OPEN_FOUR] * (my.open_four - opp.open_four)
-        + _WEIGHTS[FOUR] * (my.four - opp.four)
-        + _WEIGHTS[OPEN_THREE] * (my.open_three - opp.open_three)
-        + _WEIGHTS[THREE] * (my.three - opp.three)
-        + _WEIGHTS[OPEN_TWO] * (my.open_two - opp.open_two)
-        + _WEIGHTS[TWO] * (my.two - opp.two)
+        sum(_WEIGHTS[name] * (mine[level] - theirs[level]) for level, name in enumerate(_LEVELS))
     )

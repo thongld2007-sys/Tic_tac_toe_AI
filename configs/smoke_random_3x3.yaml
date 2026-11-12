@@ -1,0 +1,11 @@
+# Chạy thử runner: 200 ván Random vs Random trên 3×3 (tiêu chí nghiệm thu của P3.1a).
+#   python -m experiments.run configs/smoke_random_3x3.yaml
+name: smoke_random_3x3
+seed: 2026
+games: 200
+swap_first: true
+game:
+  type: tictactoe
+matchups:
+  - a: {type: random}
+    b: {type: random}

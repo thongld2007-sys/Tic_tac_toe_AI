@@ -153,6 +153,7 @@ class MCTSAgent(Agent):
         self.rollout_fn = rollout_fn
         self.use_candidates = use_candidates
         self.candidate_radius = candidate_radius
+        self.seed = seed
         self.name = f"mcts-c{self.c:.2f}-{selection}"
         self._rng = random.Random(seed)
         self.last_root: MCTSNode | None = None
@@ -236,9 +237,15 @@ class MCTSAgent(Agent):
                     assert node.move is not None
                     state.play(node.move)
 
-                # 2. Expansion: mở thêm 1 nhánh con chưa thử (nếu ván chưa kết thúc).
+                # 2. Expansion: chọn ngẫu nhiên 1 nhánh con chưa thử trong O(1)
+                # (hoán đổi với phần tử cuối rồi pop) để tránh thiên lệch vị trí trên bàn lớn.
                 if node.untried_moves and not state.is_terminal():
-                    move = node.untried_moves.pop(0)
+                    idx = self._rng.randrange(len(node.untried_moves))
+                    node.untried_moves[idx], node.untried_moves[-1] = (
+                        node.untried_moves[-1],
+                        node.untried_moves[idx],
+                    )
+                    move = node.untried_moves.pop()
                     player = state.current_player()
                     state.play(move)
                     child = MCTSNode(

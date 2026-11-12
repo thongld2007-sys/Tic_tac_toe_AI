@@ -276,8 +276,20 @@ def test_mcts_use_candidates_on_gomoku_3x3() -> None:
         state.play(mv)
 
     agent = MCTSAgent(use_candidates=True, candidate_radius=2, seed=42)
+    assert agent.seed == 42
     move = agent.select_move(state, Budget(iterations=600))
     assert move == (2, 2)
+
+
+def test_mcts_expansion_avoids_top_left_order_bias() -> None:
+    """Các nút con mở rộng không bị cố định ở góc trên-trái khi số iteration nhỏ."""
+    state = Gomoku(size=9, win_length=5)
+    agent = MCTSAgent(use_candidates=False, seed=42)
+    agent.select_move(state, Budget(iterations=10))
+    assert agent.last_root is not None
+    expanded_moves = [ch.move for ch in agent.last_root.children]
+    first_ten_top_left = [(0, c) for c in range(9)] + [(1, 0)]
+    assert expanded_moves != first_ten_top_left
 
 
 def test_mcts_unbeaten_against_random_on_3x3() -> None:

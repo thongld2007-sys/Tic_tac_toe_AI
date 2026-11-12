@@ -13,7 +13,7 @@ Cấu hình YAML
     seed: 2026                     # seed gốc, mọi seed khác suy ra từ đây
     games: 200                     # số ván cho MỖI cặp đấu
     swap_first: true               # true: ván chẵn A đi trước, ván lẻ B đi trước
-    opening_plies: 0               # số nước mở đầu ngẫu nhiên trước khi agent vào cuộc
+    opening_plies: 0               # số nước mở đầu ngẫu nhiên (lấy từ candidate_moves)
     workers: 4                     # số tiến trình; bỏ trống thì dùng số CPU - 1
     game: {type: gomoku, size: 9}  # hoặc {type: tictactoe}
     matchups:
@@ -22,6 +22,13 @@ Cấu hình YAML
 
 Giá trị nào của agent là một danh sách thì được bung thành mọi tổ hợp: ví dụ trên cho
 2 × 2 = 4 cặp đấu, mỗi cặp `games` ván.
+
+Nước mở đầu
+-----------
+`opening_plies` nước đầu được chọn ngẫu nhiên từ `state.candidate_moves()`: trên 3×3 đó là mọi
+ô trống; trên caro quân đầu nằm ở tâm bàn và các quân sau nằm quanh những quân đã đánh, nên thế
+mở đầu không bị rải ra các góc. Vì quân đầu của caro luôn ở tâm, cần `opening_plies >= 2` mới
+có thế mở đầu khác nhau.
 
 Tái lập kết quả
 ---------------
@@ -166,7 +173,12 @@ def build_game(spec: Mapping[str, Any]) -> GameState:
     kind = params.pop("type", None)
     if kind not in GAME_BUILDERS:
         raise ConfigError(f"game.type phải thuộc {sorted(GAME_BUILDERS)}, nhận được {kind!r}")
-    return GAME_BUILDERS[kind](params)
+    try:
+        return GAME_BUILDERS[kind](params)
+    except ConfigError:
+        raise
+    except (TypeError, ValueError) as error:  # ví dụ size nhỏ hơn win_length
+        raise ConfigError(f"game {kind}: {error}") from error
 
 
 def game_label(spec: Mapping[str, Any]) -> str:
@@ -189,7 +201,12 @@ def build_agent(spec: Mapping[str, Any], seed: int) -> tuple[Agent, Budget]:
         raise ConfigError(f"agent.type phải thuộc {sorted(AGENT_BUILDERS)}, nhận được {kind!r}")
     budget_spec = dict(params.pop("budget", None) or {})
     _check_params(f"budget của agent {kind}", budget_spec, BUDGET_FIELDS)
-    return AGENT_BUILDERS[kind](params, seed), Budget(**budget_spec)
+    try:
+        return AGENT_BUILDERS[kind](params, seed), Budget(**budget_spec)
+    except ConfigError:
+        raise
+    except (TypeError, ValueError) as error:  # ví dụ ordering lạ, c âm
+        raise ConfigError(f"agent {kind}: {error}") from error
 
 
 def agent_label(spec: Mapping[str, Any]) -> str:
@@ -245,6 +262,11 @@ def load_config(path: str | Path) -> dict[str, Any]:
     return normalize_config(raw)
 
 
+def _is_int(value: object) -> bool:
+    """Số nguyên thật sự: trong Python `True` cũng là `int`, nên phải loại bool riêng."""
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def normalize_config(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, Mapping):
         raise ConfigError("Cấu hình phải là một mục khóa-giá trị ở cấp cao nhất")
@@ -253,14 +275,20 @@ def normalize_config(raw: Any) -> dict[str, Any]:
         if key not in raw:
             raise ConfigError(f"Cấu hình thiếu trường `{key}`")
 
+    seed = raw.get("seed", 0)
     games = raw.get("games", 50)
+    swap_first = raw.get("swap_first", True)
     opening_plies = raw.get("opening_plies", 0)
     workers = raw.get("workers")
-    if not isinstance(games, int) or games < 1:
+    if not _is_int(seed):
+        raise ConfigError(f"seed phải là số nguyên, nhận được {seed!r}")
+    if not _is_int(games) or games < 1:
         raise ConfigError(f"games phải là số nguyên >= 1, nhận được {games!r}")
-    if not isinstance(opening_plies, int) or opening_plies < 0:
+    if not isinstance(swap_first, bool):
+        raise ConfigError(f"swap_first phải là true hoặc false, nhận được {swap_first!r}")
+    if not _is_int(opening_plies) or opening_plies < 0:
         raise ConfigError(f"opening_plies phải là số nguyên >= 0, nhận được {opening_plies!r}")
-    if workers is not None and (not isinstance(workers, int) or workers < 1):
+    if workers is not None and (not _is_int(workers) or workers < 1):
         raise ConfigError(f"workers phải là số nguyên >= 1, nhận được {workers!r}")
     if not isinstance(raw["game"], Mapping):
         raise ConfigError("game phải là một mục có trường `type`")
@@ -281,9 +309,9 @@ def normalize_config(raw: Any) -> dict[str, Any]:
 
     return {
         "name": str(raw["name"]),
-        "seed": int(raw.get("seed", 0)),
+        "seed": seed,
         "games": games,
-        "swap_first": bool(raw.get("swap_first", True)),
+        "swap_first": swap_first,
         "opening_plies": opening_plies,
         "workers": workers,
         "game": game,
@@ -315,7 +343,7 @@ def play_game(config: Mapping[str, Any], matchup: int, game_index: int) -> dict[
     opening_rng = random.Random(derive_seed(config["seed"], matchup, "opening", opening_group))
     opening_done = 0
     while opening_done < config["opening_plies"] and not state.is_terminal():
-        state.play(opening_rng.choice(state.legal_moves()))
+        state.play(opening_rng.choice(state.candidate_moves()))
         opening_done += 1
 
     sides: dict[str, tuple[Agent, Budget]] = {
@@ -392,7 +420,9 @@ def run_experiment(config: Mapping[str, Any], workers: int | None = None) -> lis
     tasks = [(m, g) for m in range(len(config["matchups"])) for g in range(config["games"])]
     if workers is None:
         workers = config.get("workers") or default_workers()
-    workers = max(1, min(workers, len(tasks)))
+    if not _is_int(workers) or workers < 1:
+        raise ValueError(f"workers phải là số nguyên >= 1, nhận được {workers!r}")
+    workers = min(workers, len(tasks))
 
     if workers == 1:
         rows = _play_chunk((config, tasks))
@@ -450,6 +480,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         config = load_config(args.config)
+        if args.workers is not None and args.workers < 1:
+            raise ConfigError(f"--workers phải >= 1, nhận được {args.workers}")
     except (OSError, yaml.YAMLError, ConfigError) as error:
         print(f"Lỗi cấu hình: {error}", file=sys.stderr)
         return 2

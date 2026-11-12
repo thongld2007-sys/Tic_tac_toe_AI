@@ -51,6 +51,6 @@ Quy ước git, code và thực nghiệm: xem [CONTRIBUTING.md](CONTRIBUTING.md)
 
 | Thành viên | Mã việc |
 | --- | --- |
-| TV1 | P6.1a |
-| TV2 |  |
-| TV3 |  |
+| TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P3.1a |
+| TV2 | P1.2, P2.2a |
+| TV3 | P1.3a, P5.3a |

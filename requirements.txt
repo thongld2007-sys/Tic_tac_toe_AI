@@ -1,0 +1,7 @@
+# Thư viện chạy
+numpy>=1.26
+pyyaml>=6.0
+
+# Công cụ phát triển
+pytest>=8.0
+ruff>=0.6

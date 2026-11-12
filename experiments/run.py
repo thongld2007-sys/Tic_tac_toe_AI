@@ -56,6 +56,7 @@ from typing import Any
 import yaml
 
 from src.agents.alphabeta import AlphaBetaAgent
+from src.agents.alphabeta_gomoku import AlphaBetaGomoku
 from src.agents.base import Agent, Budget
 from src.agents.mcts import MCTSAgent
 from src.agents.minimax import MinimaxAgent
@@ -148,6 +149,23 @@ def _build_alphabeta(params: Mapping[str, Any], seed: int) -> Agent:
     return AlphaBetaAgent(seed=seed, **params)
 
 
+ALPHABETA_GOMOKU_PARAMS = (
+    "radius",
+    "default_depth",
+    "max_candidates",
+    "use_candidates",
+    "use_immediate_tactics",
+    "use_move_ordering",
+    "use_iterative_deepening",
+    "use_tt",
+)
+
+
+def _build_alphabeta_gomoku(params: Mapping[str, Any], seed: int) -> Agent:
+    _check_params("agent alphabeta_gomoku", params, ALPHABETA_GOMOKU_PARAMS)
+    return AlphaBetaGomoku(**params)
+
+
 def _build_mcts(params: Mapping[str, Any], seed: int) -> Agent:
     _check_params("agent mcts", params, ("c", "selection", "use_candidates", "candidate_radius"))
     return MCTSAgent(seed=seed, **params)
@@ -164,6 +182,7 @@ AGENT_BUILDERS: dict[str, AgentBuilder] = {
     "random": _build_random,
     "minimax": _build_minimax,
     "alphabeta": _build_alphabeta,
+    "alphabeta_gomoku": _build_alphabeta_gomoku,
     "mcts": _build_mcts,
 }
 

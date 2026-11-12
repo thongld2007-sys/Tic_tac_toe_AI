@@ -42,10 +42,12 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 import sys
 import time
 from collections.abc import Iterable, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -145,6 +147,12 @@ class Solver:
         return values
 
 
+@lru_cache(maxsize=1)
+def default_solver() -> Solver:
+    """Solver dùng chung trong một tiến trình: cây 3×3 chỉ phải giải một lần."""
+    return Solver()
+
+
 def board_text(state: GameState) -> str:
     symbols = {0: ".", PLAYER_X: "X", PLAYER_O: "O"}
     return "/".join("".join(symbols[int(v)] for v in row) for row in state.board)
@@ -155,9 +163,7 @@ def board_text(state: GameState) -> str:
 # ---------------------------------------------------------------------------
 
 
-def mcts_decision(
-    state: GameState, iterations: int, seed: int, c: float, selection: str
-) -> Move:
+def mcts_decision(state: GameState, iterations: int, seed: int, c: float, selection: str) -> Move:
     """Nước MCTS chọn ở `state`, là hàm tất định của (seed, thế cờ)."""
     agent = MCTSAgent(c=c, selection=selection, seed=derive_seed(seed, state.hash()))
     return agent.select_move(state, Budget(iterations=iterations))
@@ -173,7 +179,7 @@ def walk_response_tree(
 ) -> dict[str, Any]:
     """Duyệt mọi cách đối thủ có thể đi khi MCTS giữ vai `role`. Trả về số đếm và các thế bẫy."""
     mcts_player = ROLES[role]
-    solver = solver or Solver()
+    solver = solver or default_solver()
     state = TicTacToe()
     seen: set[int] = set()
     counts = {"decisions": 0, "win": 0, "draw": 0, "loss": 0, "losing_moves": 0, "missed_wins": 0}
@@ -378,9 +384,7 @@ def collect_traps(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
     for row in rows:
         for trap in row["traps"]:
             key = (row["iterations"], trap["role"], trap["board"], trap["mcts_move"])
-            entry = merged.setdefault(
-                key, {"iterations": row["iterations"], **trap, "seeds": 0}
-            )
+            entry = merged.setdefault(key, {"iterations": row["iterations"], **trap, "seeds": 0})
             entry["seeds"] += 1
     return sorted(
         merged.values(), key=lambda t: (t["iterations"], -t["seeds"], t["role"], t["board"])
@@ -411,6 +415,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     bad_workers = args.workers is not None and args.workers < 1
     if args.seeds < 1 or min(args.iterations) < 1 or bad_workers:
         print("Lỗi: --seeds, --iterations và --workers phải >= 1", file=sys.stderr)
+        return 2
+    if not (math.isfinite(args.c) and args.c >= 0):
+        print(f"Lỗi: --c phải là số hữu hạn >= 0, nhận được {args.c}", file=sys.stderr)
         return 2
 
     iterations = sorted(set(args.iterations))

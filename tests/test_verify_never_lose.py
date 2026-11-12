@@ -271,9 +271,7 @@ def test_run_verification_rows_are_complete_and_reproducible() -> None:
 
 
 def test_main_writes_three_csv_files(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    code = main(
-        ["--iterations", "5", "--seeds", "2", "--workers", "1", "--out-dir", str(tmp_path)]
-    )
+    code = main(["--iterations", "5", "--seeds", "2", "--workers", "1", "--out-dir", str(tmp_path)])
     assert code == 0
     assert "I*" in capsys.readouterr().out
 
@@ -298,3 +296,11 @@ def test_main_rejects_bad_arguments(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["--iterations", "0"]) == 2
     assert main(["--workers", "0"]) == 2
     assert "Lỗi" in capsys.readouterr().err
+    for bad_c in ("-0.5", "nan", "inf"):
+        assert main(["--c", bad_c]) == 2
+        assert "--c" in capsys.readouterr().err
+
+
+def test_default_solver_is_shared_within_a_process() -> None:
+    assert vnl.default_solver() is vnl.default_solver()
+    assert vnl.default_solver().value(TicTacToe()) == 0

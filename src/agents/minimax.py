@@ -26,7 +26,8 @@ class MinimaxAgent(Agent):
     Khi nhiều nước cùng giá trị, chọn nước đứng trước trong legal_moves().
 
     Ngân sách: chỉ dùng `budget.depth`. Thế chưa kết thúc ở độ sâu giới hạn được coi là hòa (0),
-    vì agent này không có hàm lượng giá. Để None thì duyệt tới cuối ván (đúng cho 3×3).
+    vì agent này không có hàm lượng giá. Để None thì duyệt tới cuối ván (đúng cho 3×3); nếu đặt
+    thì phải >= 1.
     """
 
     name = "minimax"
@@ -40,6 +41,8 @@ class MinimaxAgent(Agent):
     def select_move(self, state: GameState, budget: Budget) -> Move:
         if state.is_terminal():
             raise ValueError("Ván đã kết thúc, không còn nước để chọn")
+        if budget.depth is not None and budget.depth < 1:
+            raise ValueError(f"budget.depth phải >= 1, nhận được {budget.depth}")
 
         start = time.perf_counter()
         self._nodes = 1  # tính cả nút gốc

@@ -49,6 +49,8 @@ class AlphaBetaAgent(Agent):
     def select_move(self, state: GameState, budget: Budget) -> Move:
         if state.is_terminal():
             raise ValueError("Ván đã kết thúc, không còn nước để chọn")
+        if budget.depth is not None and budget.depth < 1:
+            raise ValueError(f"budget.depth phải >= 1, nhận được {budget.depth}")
 
         start = time.perf_counter()
         self._nodes = 1  # tính cả nút gốc

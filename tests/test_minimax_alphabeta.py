@@ -189,6 +189,8 @@ def test_alphabeta_matches_minimax_on_1000_positions() -> None:
 
     minimax = MinimaxAgent()
     agents = {ordering: AlphaBetaAgent(ordering, seed=1) for ordering in ORDERINGS}
+    # Giá trị Minimax của các thế con đã tính, theo hash: mỗi thế chỉ duyệt cả cây một lần.
+    child_values: dict[int, int] = {}
 
     for line in sample:
         state = position(line)
@@ -211,9 +213,12 @@ def test_alphabeta_matches_minimax_on_1000_positions() -> None:
             if state.is_terminal():
                 achieved = -terminal_value(state)
             else:
-                minimax.select_move(state, FULL)
-                assert minimax.last_value is not None
-                achieved = -minimax.last_value
+                key = state.hash()
+                if key not in child_values:
+                    minimax.select_move(state, FULL)
+                    assert minimax.last_value is not None
+                    child_values[key] = minimax.last_value
+                achieved = -child_values[key]
             state.undo()
             assert achieved == expected_value, (ordering, line)
 
@@ -276,6 +281,15 @@ def test_depth_budget_limits_search(make_agent: AgentFactory) -> None:
     agent.select_move(TicTacToe(), Budget(depth=2))
     assert agent.last_stats["depth"] == 2
     assert agent.last_stats["nodes"] <= 1 + 9 + 9 * 8
+
+
+@pytest.mark.parametrize("make_agent", [MinimaxAgent, AlphaBetaAgent])
+@pytest.mark.parametrize("depth", [0, -1])
+def test_depth_budget_below_one_is_rejected(make_agent: AgentFactory, depth: int) -> None:
+    state = TicTacToe()
+    with pytest.raises(ValueError):
+        make_agent().select_move(state, Budget(depth=depth))
+    assert state.move_count() == 0
 
 
 @pytest.mark.parametrize("make_agent", [MinimaxAgent, AlphaBetaAgent])

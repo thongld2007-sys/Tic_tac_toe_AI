@@ -1,0 +1,64 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage[utf8]{inputenc}
+\usepackage[vietnamese]{babel}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!60!black,
+    citecolor=green!50!black,
+    urlcolor=blue!70!black
+}
+
+\title{Phân tích Thực nghiệm Minimax, Cắt tỉa Alpha-Beta và MCTS-UCT trên Tic-Tac-Toe $3\times 3$ và Caro $n\times n$}
+
+\author{
+    \IEEEauthorblockN{Lê Đình Thông (TV1), Nguyễn Tiến Sĩ (TV2), Trần Ngọc Phúc (TV3)}
+    \IEEEauthorblockA{
+        Trường Đại học Công nghệ, Đại học Quốc gia Hà Nội (UET - VNU)\\
+        Bài tập lớn Trí tuệ Nhân tạo 2026--2027\\
+        Email: \texttt{\{thongld20.07@gmail.com, tv2@vnu.edu.vn, 25020323@vnu.edu.vn\}}
+    }
+}
+
+\begin{document}
+
+\maketitle
+
+\input{sections/00_abstract}
+
+\begin{IEEEkeywords}
+Minimax, Alpha-Beta Pruning, Monte Carlo Tree Search, UCT, Tic-Tac-Toe, Gomoku, Caro, Rollout Policy, Heuristic Evaluation.
+\end{IEEEkeywords}
+
+\input{sections/01_introduction}
+\input{sections/02_related_work}
+\input{sections/03_problem_formulation}
+
+\section{Phương pháp Đề xuất (Methodology)}
+\label{sec:methodology}
+\input{sections/04a_alphabeta}
+\input{sections/04b_mcts_uct}
+\input{sections/04c_rollout_policies}
+
+\input{sections/05_experimental_setup}
+
+\section{Kết quả Thực nghiệm (Experimental Results)}
+\label{sec:results}
+\input{sections/06a_results_tv1}
+\input{sections/06b_results_tv2}
+\input{sections/06c_results_tv3}
+
+\input{sections/07_discussion}
+\input{sections/08_conclusion}
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

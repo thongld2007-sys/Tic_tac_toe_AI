@@ -241,3 +241,5 @@ def test_invalid_inputs_raise_value_error() -> None:
         bootstrap_ci([1.0, 2.0], seed=True)
     with pytest.raises(ValueError):
         bootstrap_diff_ci([1.0, 0.0], [1.0], paired=True)
+    with pytest.raises(ValueError, match="scores_a"):
+        summarize_matchup([1.0, 0.0, -1.0])

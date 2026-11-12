@@ -381,6 +381,8 @@ def summarize_matchup(
     wins = int(np.sum(np.isclose(arr, 1.0)))
     draws = int(np.sum(np.isclose(arr, 0.5)))
     losses = int(np.sum(np.isclose(arr, 0.0)))
+    if wins + draws + losses != n:
+        raise ValueError("scores_a chỉ được chứa các giá trị 0.0 (thua), 0.5 (hòa), 1.0 (thắng)")
 
     win_ci = wilson_ci(wins, n, confidence=confidence)
     score_ci = bootstrap_ci(

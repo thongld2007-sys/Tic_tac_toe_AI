@@ -5,6 +5,8 @@ Chủ sở hữu: TV2.  Review: TV3.
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pytest
 
@@ -24,6 +26,25 @@ def play_sequence(
         if i < len(o_moves):
             state.play(o_moves[i])
     return state
+
+
+def reference_candidates(board: np.ndarray, radius: int) -> list[Move]:
+    """Tính trực tiếp tập ứng viên từ mảng bàn cờ để đối chiếu với bản cập nhật tăng dần."""
+    n = board.shape[0]
+    occ_r, occ_c = np.nonzero(board != EMPTY)
+    if len(occ_r) == 0:
+        return [(n // 2, n // 2)]
+    result: list[Move] = []
+    for r in range(n):
+        for c in range(n):
+            if board[r, c] != EMPTY:
+                continue
+            if any(
+                max(abs(r - int(sr)), abs(c - int(sc))) <= radius
+                for sr, sc in zip(occ_r, occ_c, strict=True)
+            ):
+                result.append((r, c))
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +84,7 @@ def test_invalid_size_or_win_length_raises(size: int, win_length: int) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Luật thắng >= 5 quân theo 4 hướng và nối giữa
+# Luật thắng >= win_length quân theo 4 hướng, nối giữa và win_length tùy chỉnh
 # ---------------------------------------------------------------------------
 
 
@@ -121,6 +142,18 @@ def test_win_by_connecting_middle_gap_and_overline() -> None:
     )
     assert state.winner() is None
     state.play((4, 4))
+    assert state.winner() == PLAYER_X
+
+
+def test_win_with_custom_win_length() -> None:
+    state = Gomoku(size=6, win_length=4)
+    play_sequence(
+        state,
+        x_moves=[(2, 1), (2, 2), (2, 3)],
+        o_moves=[(0, 0), (0, 1), (0, 2)],
+    )
+    assert state.winner() is None
+    state.play((2, 4))
     assert state.winner() == PLAYER_X
 
 
@@ -230,11 +263,6 @@ def test_intersection_wins_if_at_least_one_direction_is_unblocked() -> None:
 
 def test_full_board_without_five_is_draw() -> None:
     # Mẫu bàn 5×5 (13 quân X, 12 quân O) không có 5 quân cùng màu trên bất kỳ hàng, cột, chéo nào:
-    #   X X O X X   (4 X, 1 O)
-    #   O O X O O   (1 X, 4 O)
-    #   X X O X X   (4 X, 1 O)
-    #   O O X O O   (1 X, 4 O)
-    #   X X O X O   (3 X, 2 O) -> tổng 13 X, 12 O
     target = np.array(
         [
             [PLAYER_X, PLAYER_X, PLAYER_O, PLAYER_X, PLAYER_X],
@@ -258,12 +286,7 @@ def test_full_board_without_five_is_draw() -> None:
 
 
 def test_win_on_last_cell_of_board_is_not_draw() -> None:
-    # Bàn 5×5 mà chỉ hàng 0 có 5 quân X, các hàng/cột/chéo khác đều pha trộn X và O:
-    #   X X X X X   (5 X, 0 O) - ô (0, 2) được đánh ở nước thứ 25 cuối cùng
-    #   O O X O O   (1 X, 4 O)
-    #   X X O X O   (3 X, 2 O)
-    #   O O X O O   (1 X, 4 O)
-    #   X X O X O   (3 X, 2 O) -> tổng 13 X, 12 O
+    # Bàn 5×5 mà chỉ hàng 0 có 5 quân X, ô (0, 2) được đánh ở nước thứ 25 cuối cùng:
     target = np.array(
         [
             [PLAYER_X, PLAYER_X, PLAYER_X, PLAYER_X, PLAYER_X],
@@ -292,14 +315,15 @@ def test_win_on_last_cell_of_board_is_not_draw() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_play_and_undo_preserve_hash_and_state_across_random_walk() -> None:
+def test_play_and_undo_preserve_hash_and_candidates_across_random_walk() -> None:
     rng = np.random.default_rng(2026)
     state = Gomoku(size=9)
-    snapshots: list[tuple[np.ndarray, int, int, Move | None, int]] = []
+    snapshots: list[tuple[np.ndarray, int, int, Move | None, int, list[Move], list[Move]]] = []
 
     for _step in range(30):
         if state.is_terminal():
             break
+        assert state.candidate_moves(radius=2) == reference_candidates(state.board, radius=2)
         snapshots.append(
             (
                 state.board.copy(),
@@ -307,6 +331,8 @@ def test_play_and_undo_preserve_hash_and_state_across_random_walk() -> None:
                 state.hash(),
                 state.last_move(),
                 state.move_count(),
+                state.candidate_moves(radius=2),
+                state.legal_moves(),
             )
         )
         moves = state.legal_moves()
@@ -314,13 +340,23 @@ def test_play_and_undo_preserve_hash_and_state_across_random_walk() -> None:
         state.play(move)
 
     while snapshots:
-        board_before, player_before, hash_before, last_before, count_before = snapshots.pop()
+        (
+            board_before,
+            player_before,
+            hash_before,
+            last_before,
+            count_before,
+            cands_before,
+            legal_before,
+        ) = snapshots.pop()
         state.undo()
         assert np.array_equal(state.board, board_before)
         assert state.current_player() == player_before
         assert state.hash() == hash_before
         assert state.last_move() == last_before
         assert state.move_count() == count_before
+        assert state.candidate_moves(radius=2) == cands_before
+        assert state.legal_moves() == legal_before
         assert state.winner() is None
 
 
@@ -344,7 +380,12 @@ def test_zobrist_hash_distinguishes_positions_and_players() -> None:
     x_corner = Gomoku(size=9)
     x_corner.play((0, 0))
 
-    assert len({empty.hash(), x_center.hash(), x_corner.hash()}) == 3
+    # Cùng vị trí quân trên bàn với `x_center` nhưng giả lập lượt đi là PLAYER_X:
+    same_board_other_turn = x_center.clone()
+    same_board_other_turn._player = PLAYER_X
+    same_board_other_turn._hash ^= same_board_other_turn._turn_key
+
+    assert len({empty.hash(), x_center.hash(), x_corner.hash(), same_board_other_turn.hash()}) == 4
 
 
 def test_undo_reopens_won_game() -> None:
@@ -373,15 +414,18 @@ def test_clone_is_independent() -> None:
     assert copy.last_move() == state.last_move()
     assert copy.move_count() == state.move_count()
     assert copy.block_two_ends == state.block_two_ends
+    assert copy.candidate_moves() == state.candidate_moves()
 
     copy.play((3, 3))
     assert state.board[3, 3] == EMPTY
     assert state.move_count() == 2
     assert copy.move_count() == 3
+    assert (3, 3) in state.candidate_moves()
+    assert (3, 3) not in copy.candidate_moves()
 
 
 # ---------------------------------------------------------------------------
-# candidate_moves và kiểm tra ngoại lệ
+# candidate_moves, chuẩn hóa kiểu nước đi, __str__ và kiểm tra ngoại lệ
 # ---------------------------------------------------------------------------
 
 
@@ -400,6 +444,36 @@ def test_candidate_moves_radius_around_single_and_multiple_stones() -> None:
     # Khung 3×4 quanh (4,4) và (4,5) có 12 ô, trừ 2 ô đã có quân còn 10 ô trống.
     assert len(cands_two_stones) == 10
     assert (4, 4) not in cands_two_stones and (4, 5) not in cands_two_stones
+
+    state.undo()
+    assert state.candidate_moves(radius=2) == cands_r2
+    state.undo()
+    assert state.candidate_moves(radius=2) == [(4, 4)]
+
+
+def test_play_normalizes_numpy_integers_and_rejects_non_integers() -> None:
+    state = Gomoku(size=9)
+    state.play((np.int64(4), np.int32(5)))  # type: ignore[arg-type]
+    last = state.last_move()
+    assert last == (4, 5)
+    assert last is not None
+    assert type(last[0]) is int and type(last[1]) is int
+    assert json.dumps(last) == "[4, 5]"
+
+    for bad_type_move in [(4.0, 4.0), (True, 0), (0, False), ("4", 4), (4,), (1, 2, 3)]:
+        with pytest.raises(ValueError):
+            state.play(bad_type_move)  # type: ignore[arg-type]
+
+
+def test_str_representation() -> None:
+    state = Gomoku(size=5)
+    state.play((0, 0))
+    state.play((0, 1))
+    rendered = str(state)
+    lines = rendered.splitlines()
+    assert len(lines) == 5
+    assert lines[0] == "X O . . ."
+    assert lines[1] == ". . . . ."
 
 
 def test_invalid_moves_and_invalid_operations_raise() -> None:

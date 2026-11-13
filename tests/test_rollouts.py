@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import random
+import subprocess
+import sys
 
 import pytest
 import yaml
@@ -41,6 +43,48 @@ def test_rollout_policies_registered_and_resolvable() -> None:
         agent = MCTSAgent(rollout=name, use_candidates=True, reuse_tree=True, seed=7)
         assert agent.rollout == name
         assert agent.rollout_fn is expected_fn
+
+
+def test_l0_resolves_to_rollout_l0_in_fresh_process_and_worker_determinism() -> None:
+    """Trong tiến trình mới chưa import rollouts, MCTSAgent(rollout='l0') vẫn trỏ tới rollout_l0."""
+    code = (
+        "import sys; "
+        "from src.agents.mcts import MCTSAgent; "
+        "assert 'src.agents.rollouts' not in sys.modules; "
+        "agent = MCTSAgent(rollout='l0'); "
+        "from src.agents.rollouts import rollout_l0; "
+        "assert agent.rollout_fn is rollout_l0"
+    )
+    proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)
+    assert proc.returncode == 0, proc.stderr
+
+    # Kết quả chạy l0, l1, l2 qua runner không phụ thuộc số tiến trình (workers=1 vs workers=2)
+    yaml_text = """
+name: test_l0_worker_determinism
+seed: 2026
+games: 4
+swap_first: true
+opening_plies: 2
+game:
+  type: gomoku
+  size: 9
+matchups:
+  - a:
+      type: mcts
+      rollout: [l0, l1, l2]
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: true
+      budget:
+        iterations: 50
+    b:
+      type: random
+"""
+    cfg = normalize_config(yaml.safe_load(yaml_text))
+    rows_w1 = run_experiment(cfg, workers=1)
+    rows_w2 = run_experiment(cfg, workers=2)
+    keys = ("matchup", "game_index", "winner", "score_a", "plies", "a_moves", "a_nodes")
+    assert [{k: r[k] for k in keys} for r in rows_w1] == [{k: r[k] for k in keys} for r in rows_w2]
 
 
 @pytest.mark.parametrize("rollout_fn", [rollout_l0, rollout_l1, rollout_l2])

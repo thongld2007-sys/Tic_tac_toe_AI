@@ -21,10 +21,17 @@ Tối ưu tốc độ mô phỏng (`sims_per_s`) trên bàn Caro (`Gomoku`):
     nhật/hoàn tác Zobrist hash và mặt nạ lân cận qua hàng chục nước đi thử).
   - Theo dõi tăng dần (incremental) các đầu mút dọa thắng dọc theo 4 hướng của nước vừa đánh:
     mỗi nước đi mới chỉ kiểm tra tối đa 8 đầu mút thay vì quét lại toàn bộ bàn cờ.
+  - Chỉ sử dụng các thuộc tính và phương thức công khai của `Gomoku` (`board`, `size`,
+    `win_length`, `block_two_ends`, `candidate_moves`, `legal_moves`) và `MCTSAgent`
+    (`rollout_fn`, `select_move`, `last_stats`), không phụ thuộc thành phần nội bộ (`_...`).
+  - Lưu ý thực nghiệm: khi chạy nhiều tiến trình (`workers`) song song, tranh chấp CPU có thể
+    làm thời gian mỗi nước tăng lên; khi chạy thực nghiệm ngân sách thời gian cố định ở P3.3
+    cần giữ cấu hình `workers` nhất quán giữa các phương pháp.
 """
 
 from __future__ import annotations
 
+import inspect
 import random
 import time
 from functools import cache
@@ -102,26 +109,15 @@ def _load_gomoku_grid(
     stones_x: list[int] = []
     stones_o: list[int] = []
 
-    if state._history:
-        board = state.board
-        for r, c in state._history:
-            idx = (r + 1) * stride + (c + 1)
-            val = int(board[r, c])
+    flat = state.board.ravel().tolist()
+    for k, val in enumerate(flat):
+        if val:
+            idx = cell_indices[k]
             grid[idx] = val
             if val == PLAYER_X:
                 stones_x.append(idx)
             elif val == PLAYER_O:
                 stones_o.append(idx)
-    else:
-        flat = state.board.ravel().tolist()
-        for k, val in enumerate(flat):
-            if val:
-                idx = cell_indices[k]
-                grid[idx] = val
-                if val == PLAYER_X:
-                    stones_x.append(idx)
-                elif val == PLAYER_O:
-                    stones_o.append(idx)
 
     return grid, stones_x, stones_o
 
@@ -453,7 +449,22 @@ def find_winning_moves(
         moves = state.legal_moves()
 
     if isinstance(state, Gomoku):
-        return [mv for mv in moves if state._checks_win_at(mv[0], mv[1], target)]
+        stride, base_grid, cell_indices, _, dirs, _ = _gomoku_tables(state.size, 2)
+        grid, _, _ = _load_gomoku_grid(state, stride, base_grid, cell_indices)
+        win_len = state.win_length
+        block_two = state.block_two_ends
+        return [
+            mv
+            for mv in moves
+            if _check_win_1d(
+                grid,
+                (mv[0] + 1) * stride + (mv[1] + 1),
+                target,
+                win_len,
+                block_two,
+                dirs,
+            )
+        ]
 
     # Đối với GameState tổng quát (ví dụ TicTacToe 3×3)
     winning: list[Move] = []
@@ -621,13 +632,22 @@ def measure_sims_per_second(
         reuse_tree=reuse_tree,
         seed=seed,
     )
+    rollout_fn = agent.rollout_fn
+    params = inspect.signature(rollout_fn).parameters
+    accepts_max_moves = "max_moves" in params or any(
+        p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()
+    )
+    rng = random.Random(seed)
     t0 = time.perf_counter()
-    for _ in range(iterations):
-        agent._run_rollout(state)
+    if rollout_depth is not None and accepts_max_moves:
+        for _ in range(iterations):
+            rollout_fn(state, rng, max_moves=rollout_depth)  # type: ignore[call-arg]
+    else:
+        for _ in range(iterations):
+            rollout_fn(state, rng)
     rollout_elapsed = time.perf_counter() - t0
     rollout_sps = (iterations / rollout_elapsed) if rollout_elapsed > 0 else 0.0
 
-    agent._rng = random.Random(seed)
     agent.select_move(state, Budget(iterations=iterations))
     stats = agent.last_stats
     return {

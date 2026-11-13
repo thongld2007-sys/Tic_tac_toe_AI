@@ -108,12 +108,11 @@ def resolve_rollout(rollout: str | RolloutFn) -> tuple[str, RolloutFn]:
         return name, rollout
     if isinstance(rollout, str):
         key = rollout.strip().lower()
-        if key not in ROLLOUT_POLICIES:
-            # Thử nạp module src.agents.rollouts (P2.3) nếu đã được cài đặt
-            try:
-                importlib.import_module("src.agents.rollouts")
-            except ModuleNotFoundError:
-                pass
+        # Luôn nạp module src.agents.rollouts (P2.3) trước khi tra bảng để "l0" thống nhất
+        try:
+            importlib.import_module("src.agents.rollouts")
+        except ModuleNotFoundError:
+            pass
         if key in ROLLOUT_POLICIES:
             return key, ROLLOUT_POLICIES[key]
         allowed = sorted(ROLLOUT_POLICIES)

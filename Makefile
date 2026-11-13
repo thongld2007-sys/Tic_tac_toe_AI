@@ -19,4 +19,4 @@ figures:
 	@echo "make figures: chua co, thuoc viec P3.2b (TV2)"; exit 1
 
 demo:
-	@echo "make demo: chua co, thuoc viec P6.2 / P6.3"; exit 1
+	$(PYTHON) -m src.ui.gui_core

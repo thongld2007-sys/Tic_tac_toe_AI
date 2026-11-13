@@ -1,7 +1,8 @@
-"""Unit test cho chính sách rollout L0–L2 và MCTS trên bàn Caro (P2.3a)."""
+"""Unit test cho chính sách rollout L0–L4 và MCTS trên bàn Caro (P2.3a & P2.3b)."""
 
 from __future__ import annotations
 
+import math
 import random
 import subprocess
 import sys
@@ -16,13 +17,19 @@ from src.agents.rollouts import (
     _find_initial_wins_1d,
     _gomoku_tables,
     _load_gomoku_grid,
+    evaluate_leaf_tanh,
     find_winning_moves,
     measure_sims_per_second,
     rollout_l0,
     rollout_l1,
     rollout_l2,
+    rollout_l3,
+    rollout_l4,
+    score_move_pattern,
+    select_softmax_move,
     select_tactical_move,
 )
+from src.eval.patterns import evaluate as evaluate_patterns
 from src.games.base import PLAYER_O, PLAYER_X
 from src.games.gomoku import Gomoku
 from src.games.tictactoe import TicTacToe
@@ -34,8 +41,14 @@ def _play_moves(state: Gomoku | TicTacToe, moves: list[tuple[int, int]]) -> None
 
 
 def test_rollout_policies_registered_and_resolvable() -> None:
-    """Các chính sách 'l0', 'l1', 'l2' được đăng ký và giải được qua resolve_rollout & MCTSAgent."""
-    for name, expected_fn in (("l0", rollout_l0), ("l1", rollout_l1), ("l2", rollout_l2)):
+    """Các chính sách 'l0'–'l4' được đăng ký và giải được qua resolve_rollout & MCTSAgent."""
+    for name, expected_fn in (
+        ("l0", rollout_l0),
+        ("l1", rollout_l1),
+        ("l2", rollout_l2),
+        ("l3", rollout_l3),
+        ("l4", rollout_l4),
+    ):
         resolved_name, resolved_fn = resolve_rollout(name.upper())
         assert resolved_name == name
         assert resolved_fn is expected_fn
@@ -87,9 +100,9 @@ matchups:
     assert [{k: r[k] for k in keys} for r in rows_w1] == [{k: r[k] for k in keys} for r in rows_w2]
 
 
-@pytest.mark.parametrize("rollout_fn", [rollout_l0, rollout_l1, rollout_l2])
+@pytest.mark.parametrize("rollout_fn", [rollout_l0, rollout_l1, rollout_l2, rollout_l3, rollout_l4])
 def test_rollouts_preserve_state_on_gomoku_and_tictactoe(rollout_fn) -> None:
-    """Mọi hàm rollout L0–L2 phải giữ nguyên bàn cờ, hash và số nước đi sau khi chạy."""
+    """Mọi hàm rollout L0–L4 phải giữ nguyên bàn cờ, hash và số nước đi sau khi chạy."""
     for state in (Gomoku(size=9), TicTacToe()):
         if isinstance(state, Gomoku):
             _play_moves(state, [(4, 4), (4, 5), (3, 4), (3, 5), (5, 4)])
@@ -102,15 +115,15 @@ def test_rollouts_preserve_state_on_gomoku_and_tictactoe(rollout_fn) -> None:
         before_player = state.current_player()
 
         val_full = rollout_fn(state, random.Random(42))
-        assert val_full in (-1.0, 0.0, 1.0)
+        assert -1.0 <= val_full <= 1.0
         assert state.move_count() == before_count
         assert state.hash() == before_hash
         assert state.current_player() == before_player
         assert (state.board == before_board).all()
 
-        # Khi cắt sớm với max_moves nhỏ chưa kịp kết thúc ván, trả về 0.0 và vẫn giữ nguyên state
+        # Khi cắt sớm với max_moves nhỏ, giá trị vẫn nằm trong [-1, 1] và giữ nguyên state
         val_trunc = rollout_fn(state, random.Random(42), max_moves=1)
-        assert val_trunc in (-1.0, 0.0, 1.0)
+        assert -1.0 <= val_trunc <= 1.0
         assert state.move_count() == before_count
         assert state.hash() == before_hash
         assert (state.board == before_board).all()
@@ -315,3 +328,118 @@ matchups:
     summary = summarize(rows)[0]
     win_rate = summary["a_wins"] / summary["games"]
     assert win_rate >= 0.95, f"Tỷ lệ thắng Random chỉ đạt {win_rate:.1%} (< 95%)"
+
+
+def test_l3_local_pattern_scoring_and_softmax_sampling() -> None:
+    """P2.3b: L3 chấm điểm mẫu cục bộ cao cho nước tạo OPEN_FOUR và ưu tiên chọn theo softmax."""
+    state = Gomoku(size=9)
+    # X có 3 quân mở 2 đầu tại (4,3), (4,4), (4,5); O có các quân rời ở góc trên
+    _play_moves(
+        state,
+        [(4, 3), (1, 1), (4, 4), (1, 3), (4, 5), (2, 1)],
+    )
+    assert state.current_player() == PLAYER_X
+
+    # Hai đầu (4, 2) và (4, 6) tạo OPEN_FOUR cho X nên phải có điểm mẫu cao hơn hẳn ô xa (8, 8)
+    s_open4_left = score_move_pattern(state, (4, 2), PLAYER_X)
+    s_open4_right = score_move_pattern(state, (4, 6), PLAYER_X)
+    s_far = score_move_pattern(state, (8, 8), PLAYER_X)
+    assert s_open4_left >= 4.0
+    assert s_open4_right >= 4.0
+    assert s_far == pytest.approx(0.0)
+
+    # Với nhiệt độ thấp (temperature=0.1), select_softmax_move gần như luôn chọn (4,2) hoặc (4,6)
+    rng = random.Random(2026)
+    hits = sum(
+        select_softmax_move(state, rng, temperature=0.1, radius=2) in {(4, 2), (4, 6)}
+        for _ in range(50)
+    )
+    assert hits >= 45
+
+    # Với nhiệt độ mặc định (temperature=1.0), tần suất chọn (4,2)/(4,6) vẫn vượt trội so với L2
+    rng_default = random.Random(2026)
+    hits_default = sum(
+        select_softmax_move(state, rng_default, temperature=1.0, radius=2) in {(4, 2), (4, 6)}
+        for _ in range(200)
+    )
+    assert hits_default >= 80
+
+    with pytest.raises(ValueError, match="temperature"):
+        rollout_l3(state, rng, temperature=0.0)
+    with pytest.raises(ValueError, match="radius"):
+        rollout_l3(state, rng, radius=0)
+    with pytest.raises(ValueError, match="ngoài bàn"):
+        score_move_pattern(state, (9, 9))
+
+
+def test_l4_truncation_and_tanh_pattern_evaluation() -> None:
+    """P2.3b: L4 cắt sớm tại d_cut và trả về tanh(evaluate(s, player_at_start) / tau)."""
+    state = Gomoku(size=9)
+    # Tạo thế X áp đảo hoàn toàn (có OPEN_THREE tại hàng 4), tới lượt X hoặc O
+    _play_moves(
+        state,
+        [(4, 3), (1, 1), (4, 4), (1, 8), (4, 5), (8, 1)],
+    )
+    assert state.current_player() == PLAYER_X
+
+    # Khi cutoff_depth=0 (cắt ngay lập tức không đi thêm nước nào), L4 trả về đúng tanh(eval / tau)
+    tau = 2000.0
+    expected_x = math.tanh(evaluate_patterns(state.board, PLAYER_X, state.block_two_ends) / tau)
+    assert expected_x > 0.3
+    val_cut0 = rollout_l4(state, random.Random(7), cutoff_depth=0, tau=tau)
+    assert val_cut0 == pytest.approx(expected_x)
+    assert evaluate_leaf_tanh(state, PLAYER_X, tau=tau) == pytest.approx(expected_x)
+    assert evaluate_leaf_tanh(state, PLAYER_O, tau=tau) == pytest.approx(-expected_x)
+
+    # Khi chạy với cutoff_depth=2 (chưa đủ số nước để tạo 5 quân), giá trị thuộc (0, 1)
+    val_cut2 = rollout_l4(state, random.Random(7), cutoff_depth=2, tau=tau)
+    assert 0.0 < val_cut2 < 1.0
+
+    # Khi có nước thắng ngay trong giới hạn d_cut, L4 trả về chính xác +1.0
+    state_win1 = Gomoku(size=9)
+    _play_moves(
+        state_win1,
+        [(4, 2), (1, 1), (4, 3), (1, 2), (4, 4), (1, 3), (4, 5), (1, 5)],
+    )
+    assert rollout_l4(state_win1, random.Random(7), cutoff_depth=2) == pytest.approx(1.0)
+
+    with pytest.raises(ValueError, match="cutoff_depth"):
+        rollout_l4(state, random.Random(7), cutoff_depth=-1)
+    with pytest.raises(ValueError, match="tau"):
+        rollout_l4(state, random.Random(7), tau=0.0)
+
+
+def test_l3_and_l4_run_in_experiment_runner_and_beat_random() -> None:
+    """Tiêu chí P2.3b: L3 và L4 chạy được trong runner (kể cả đa tiến trình) và thắng Random."""
+    yaml_text = """
+name: test_p23b_l3_l4_runner
+seed: 2026
+games: 4
+swap_first: true
+opening_plies: 2
+game:
+  type: gomoku
+  size: 9
+matchups:
+  - a:
+      type: mcts
+      rollout: [l3, l4]
+      rollout_depth: 6
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: true
+      budget:
+        iterations: 80
+    b:
+      type: random
+"""
+    cfg = normalize_config(yaml.safe_load(yaml_text))
+    rows_w1 = run_experiment(cfg, workers=1)
+    rows_w2 = run_experiment(cfg, workers=2)
+    keys = ("matchup", "game_index", "winner", "score_a", "plies", "a_moves", "a_nodes")
+    assert [{k: r[k] for k in keys} for r in rows_w1] == [{k: r[k] for k in keys} for r in rows_w2]
+
+    summaries = summarize(rows_w2)
+    assert len(summaries) == 2
+    for entry in summaries:
+        assert entry["score_a"] >= 0.8

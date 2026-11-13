@@ -39,6 +39,14 @@ Kiểm chứng "MCTS không bao giờ thua" trên 3×3 (bảng T3 và ngưỡng 
 python -m experiments.verify_never_lose
 ```
 
+## Giao diện đồ họa (GUI)
+
+Mở giao diện chơi trực tiếp (Người vs AI, AI vs AI, đổi thuật toán/tham số động và hoàn tác `Undo` trên cả bàn 3×3 lẫn Caro):
+
+```bash
+python -m src.ui.gui_core
+```
+
 ## Cấu trúc thư mục
 
 ```
@@ -59,5 +67,5 @@ Quy ước git, code và thực nghiệm: xem [CONTRIBUTING.md](CONTRIBUTING.md)
 | Thành viên | Mã việc |
 | --- | --- |
 | TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a |
-| TV2 | P1.2, P2.2a, P2.2b, P3.2a |
+| TV2 | P1.2, P2.2a, P2.2b, P3.2a, P6.2 |
 | TV3 | P1.3a, P1.3b, P2.3a, P5.3a |

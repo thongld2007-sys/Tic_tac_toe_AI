@@ -1,0 +1,22 @@
+# Kiểm chứng nghiệm thu P2.3a: MCTS caro (1000 iteration, L0/L1/L2, ứng viên, tái dùng cây) đấu 200 ván với Random.
+# Chạy: python -m experiments.run configs/mcts_gomoku_vs_random.yaml
+name: mcts_gomoku_vs_random
+seed: 2026
+games: 200
+swap_first: true
+opening_plies: 2
+game:
+  type: gomoku
+  size: 9
+matchups:
+  - a:
+      type: mcts
+      rollout: [l0, l1, l2]
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: true
+      budget:
+        iterations: 1000
+    b:
+      type: random
+

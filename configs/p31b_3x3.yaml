@@ -1,0 +1,17 @@
+# P3.1b. With signed rewards, c_code = 2 * c on the assignment's [0, 1] scale.
+name: p31b_3x3
+seed: 2026
+games: 200
+swap_first: true
+opening_plies: 0
+game: {type: tictactoe}
+matchups:
+  - a:
+      type: mcts
+      rollout: l0
+      selection: robust
+      use_candidates: false
+      reuse_tree: false
+      c: [1.0, 2.0, 2.8, 4.0]
+      budget: {iterations: [100, 500, 1000, 2000, 5000]}
+    b: {type: random}

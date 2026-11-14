@@ -62,10 +62,29 @@ tests/          Unit test (pytest)
 
 Quy ước git, code và thực nghiệm: xem [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Khảo sát UCT (P3.1b)
+
+Chạy từ gốc repo sau khi cài requirements.txt:
+
+~~~sh
+python -m experiments.run configs/p31b_3x3.yaml --workers 8
+python -m experiments.run configs/p31b_9x9.yaml --workers 8
+python -m experiments.p31b_figures
+~~~
+
+Hai cấu hình dùng MCTS L0 đấu Random. Mỗi điểm có 200 ván, đổi bên sau mỗi ván.
+Bàn 3×3 bắt đầu trống. Bàn caro 9×9 dùng hai nước mở đầu dùng chung cho từng cặp ván.
+Kết quả từng ván nằm trong experiments/results/p31b_*.csv, hình F1/F2 nằm trong report/figures.
+Tỷ lệ thắng là số ván MCTS thắng chia tổng số ván, với khoảng Wilson 95%.
+
+Hình ghi c theo thang thưởng [0, 1]. Runner ghi c thực sự truyền cho agent trong a_params.
+Vì Q_code = 2 Q_đề − 1, chọn c_code = 2 c_đề khiến UCT_code = 2 UCT_đề − 1,
+giữ cùng thứ tự ưu tiên giữa các nước đã thăm.
+
 ## Đóng góp
 
 | Thành viên | Mã việc |
 | --- | --- |
-| TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a |
+| TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a, P3.1b |
 | TV2 | P1.2, P2.2a, P2.2b, P3.2a, P6.2 |
 | TV3 | P1.3a, P1.3b, P2.3a, P2.3b, P5.3a |

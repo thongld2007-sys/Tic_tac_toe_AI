@@ -25,7 +25,7 @@ def plot(board, figure, title):
     if groups.keys() != expected:
         raise ValueError(f"Incomplete parameter grid for {board}")
     fig, ax = plt.subplots(figsize=(7, 4.2), layout="constrained")
-    for c, marker in zip(COEFFICIENTS, ["o", "s", "^", "D"]):
+    for c, marker in zip(COEFFICIENTS, ["o", "s", "^", "D"], strict=True):
         rates, lows, highs = [], [], []
         for n in BUDGETS:
             rows = groups[c, n]

@@ -356,6 +356,13 @@ def test_l3_local_pattern_scoring_and_softmax_sampling() -> None:
     )
     assert hits >= 45
 
+    # Với nhiệt độ cực nhỏ subnormal (temperature=1e-310), không tràn 1/T thành inf gây NaN
+    assert select_softmax_move(state, random.Random(7), temperature=1e-310, radius=2) in {
+        (4, 2),
+        (4, 6),
+    }
+    assert rollout_l3(state, random.Random(7), temperature=1e-310) == pytest.approx(1.0)
+
     # Với nhiệt độ mặc định (temperature=1.0), tần suất chọn (4,2)/(4,6) vẫn vượt trội so với L2
     rng_default = random.Random(2026)
     hits_default = sum(
@@ -402,6 +409,25 @@ def test_l4_truncation_and_tanh_pattern_evaluation() -> None:
         [(4, 2), (1, 1), (4, 3), (1, 2), (4, 4), (1, 3), (4, 5), (1, 5)],
     )
     assert rollout_l4(state_win1, random.Random(7), cutoff_depth=2) == pytest.approx(1.0)
+
+    # Kiểm tra tham số tau thực sự có tác dụng trên TicTacToe 3×3 và Gomoku có win_length != 5
+    state_ttt = TicTacToe()
+    state_ttt.play((1, 1))  # X đi giữa (nằm trên 4 đường thắng), tới lượt O -> raw = -40.0
+    for tau_test in (1.0, 10000.0):
+        expected_ttt = math.tanh(-40.0 / tau_test)
+        assert rollout_l4(state_ttt, random.Random(7), cutoff_depth=0, tau=tau_test) == (
+            pytest.approx(expected_ttt)
+        )
+        assert evaluate_leaf_tanh(state_ttt, tau=tau_test) == pytest.approx(expected_ttt)
+
+    state_g4 = Gomoku(size=5, win_length=4)
+    state_g4.play((2, 2))  # X đi tâm 5×5 (nằm trên 8 đoạn dài 4), tới lượt O -> raw = -80.0
+    for tau_test in (1.0, 10000.0):
+        expected_g4 = math.tanh(-80.0 / tau_test)
+        assert rollout_l4(state_g4, random.Random(7), cutoff_depth=0, tau=tau_test) == (
+            pytest.approx(expected_g4)
+        )
+        assert evaluate_leaf_tanh(state_g4, tau=tau_test) == pytest.approx(expected_g4)
 
     with pytest.raises(ValueError, match="cutoff_depth"):
         rollout_l4(state, random.Random(7), cutoff_depth=-1)

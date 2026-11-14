@@ -534,7 +534,7 @@ def _sample_softmax_1d(
     has_r1: list[int],
     player: int,
     dirs: tuple[int, int, int, int],
-    inv_t: float,
+    temperature: float,
     rng: random.Random,
 ) -> tuple[int, int]:
     """Lấy mẫu 1 ô trống từ `pool[:pool_len]` theo phân phối softmax trên điểm mẫu cục bộ."""
@@ -561,12 +561,12 @@ def _sample_softmax_1d(
     if n_cands == 1 or max_s == 0.0:
         return valid_cands[rng.randrange(n_cands)], pool_len
 
-    w_zero = math.exp(-max_s * inv_t)
+    w_zero = math.exp(-max_s / temperature)
     cum_weights: list[float] = []
     total_w = 0.0
     exp_fn = math.exp
     for s in scores:
-        w = w_zero if s == 0.0 else exp_fn((s - max_s) * inv_t)
+        w = w_zero if s == 0.0 else exp_fn((s - max_s) / temperature)
         total_w += w
         cum_weights.append(total_w)
 
@@ -623,8 +623,7 @@ def _evaluate_grid_gomoku_tanh(
         return math.tanh(raw / tau)
 
     raw_gen = _evaluate_board_generic(board_copy, player_at_start, state.win_length)
-    scale = max(100.0, float(10 ** (state.win_length - 1)))
-    return math.tanh(raw_gen / scale)
+    return math.tanh(raw_gen / tau)
 
 
 def _rollout_softmax_gomoku(
@@ -696,7 +695,6 @@ def _rollout_softmax_gomoku(
                     pool.append(n_idx)
     pool_len = len(pool)
 
-    inv_t = 1.0 / temperature
     player = player_at_start
     moves_played = 0
 
@@ -737,7 +735,7 @@ def _rollout_softmax_gomoku(
         else:
             # 3. Lấy mẫu softmax theo điểm mẫu cục bộ trên tập ứng viên
             idx0, pool_len = _sample_softmax_1d(
-                grid, pool, pool_len, has_r1, player, dirs, inv_t, rng
+                grid, pool, pool_len, has_r1, player, dirs, temperature, rng
             )
             if idx0 == 0:
                 for cand in cell_indices:
@@ -1019,11 +1017,10 @@ def select_softmax_move(
     if max_s == 0.0:
         return rng.choice(pool)
 
-    inv_t = 1.0 / temp
     cum_weights: list[float] = []
     total_w = 0.0
     for s in scores:
-        total_w += math.exp((s - max_s) * inv_t)
+        total_w += math.exp((s - max_s) / temp)
         cum_weights.append(total_w)
 
     pos = bisect_left(cum_weights, rng.random() * total_w)
@@ -1053,8 +1050,7 @@ def evaluate_leaf_tanh(
 
     win_len = getattr(state, "win_length", min(5, int(state.board.shape[0])))
     raw_gen = _evaluate_board_generic(state.board, target, win_len)
-    scale = max(100.0, float(10 ** (win_len - 1)))
-    return math.tanh(raw_gen / scale)
+    return math.tanh(raw_gen / tau_val)
 
 
 def _rollout_softmax_generic(

@@ -1,0 +1,66 @@
+# P3.2b (R4): So sánh 3 quy tắc chọn nước cuối tại gốc (robust, max, max_robust) trên bàn 3×3.
+# Chạy: python -m experiments.run configs/p32b_r4_3x3.yaml --workers 8
+name: p32b_r4_3x3
+seed: 2026
+games: 200
+swap_first: true
+opening_plies: 1
+game:
+  type: tictactoe
+matchups:
+  # 1. Đấu với Alpha-Beta hoàn hảo qua các ngân sách mô phỏng
+  - a:
+      type: mcts
+      rollout: l0
+      selection: [robust, max, max_robust]
+      use_candidates: false
+      reuse_tree: false
+      c: 0.5
+      budget:
+        iterations: [50, 100, 250, 500, 1000]
+    b:
+      type: alphabeta
+      ordering: natural
+  # 2. Đối đầu trực tiếp giữa các quy tắc chọn nước tại cùng ngân sách N = 100
+  - a:
+      type: mcts
+      rollout: l0
+      selection: robust
+      c: 0.5
+      budget:
+        iterations: 100
+    b:
+      type: mcts
+      rollout: l0
+      selection: max
+      c: 0.5
+      budget:
+        iterations: 100
+  - a:
+      type: mcts
+      rollout: l0
+      selection: max_robust
+      c: 0.5
+      budget:
+        iterations: 100
+    b:
+      type: mcts
+      rollout: l0
+      selection: max
+      c: 0.5
+      budget:
+        iterations: 100
+  - a:
+      type: mcts
+      rollout: l0
+      selection: robust
+      c: 0.5
+      budget:
+        iterations: 100
+    b:
+      type: mcts
+      rollout: l0
+      selection: max_robust
+      c: 0.5
+      budget:
+        iterations: 100

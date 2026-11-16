@@ -81,10 +81,20 @@ Hình ghi c theo thang thưởng [0, 1]. Runner ghi c thực sự truyền cho a
 Vì Q_code = 2 Q_đề − 1, chọn c_code = 2 c_đề khiến UCT_code = 2 UCT_đề − 1,
 giữ cùng thứ tự ưu tiên giữa các nước đã thăm.
 
+## So sánh quy tắc chọn nước cuối R4 và sinh toàn bộ hình vẽ (P3.2b)
+
+Chạy thực nghiệm R4 (so sánh `robust`, `max`, `max_robust` trên bàn 3×3 và Caro 9×9) và sinh toàn bộ biểu đồ vector PDF (`F1.pdf`, `F2.pdf`, `F3.pdf`) cùng bảng `T4`, `T5`:
+
+~~~sh
+python -m experiments.run configs/p32b_r4_3x3.yaml --workers 8
+python -m experiments.run configs/p32b_r4_9x9.yaml --workers 8
+python -m experiments.plots
+~~~
+
 ## Đóng góp
 
 | Thành viên | Mã việc |
 | --- | --- |
 | TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a, P3.1b |
-| TV2 | P1.2, P2.2a, P2.2b, P3.2a, P6.2 |
+| TV2 | P1.2, P2.2a, P2.2b, P3.2a, P3.2b, P6.2 |
 | TV3 | P1.3a, P1.3b, P2.3a, P2.3b, P5.3a |

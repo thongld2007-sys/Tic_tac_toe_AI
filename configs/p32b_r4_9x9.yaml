@@ -1,0 +1,93 @@
+# P3.2b (R4): So sánh 3 quy tắc chọn nước cuối tại gốc (robust, max, max_robust) trên bàn Caro 9×9.
+# Chạy: python -m experiments.run configs/p32b_r4_9x9.yaml --workers 8
+name: p32b_r4_9x9
+seed: 2026
+games: 200
+swap_first: true
+opening_plies: 2
+game:
+  type: gomoku
+  size: 9
+matchups:
+  # 1. So sánh 3 quy tắc chọn nước qua các mức ngân sách trước cùng đối thủ chuẩn MCTS(N=60)
+  - a:
+      type: mcts
+      rollout: l0
+      selection: [robust, max, max_robust]
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 0.5
+      budget:
+        iterations: [40, 80, 160, 320]
+    b:
+      type: mcts
+      rollout: l0
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 1.4
+      budget:
+        iterations: 60
+  # 2. Đối đầu trực tiếp giữa các quy tắc chọn nước tại cùng ngân sách N = 80
+  - a:
+      type: mcts
+      rollout: l0
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 0.5
+      budget:
+        iterations: 80
+    b:
+      type: mcts
+      rollout: l0
+      selection: max
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 0.5
+      budget:
+        iterations: 80
+  - a:
+      type: mcts
+      rollout: l0
+      selection: max_robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 0.5
+      budget:
+        iterations: 80
+    b:
+      type: mcts
+      rollout: l0
+      selection: max
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 0.5
+      budget:
+        iterations: 80
+  - a:
+      type: mcts
+      rollout: l0
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 0.5
+      budget:
+        iterations: 80
+    b:
+      type: mcts
+      rollout: l0
+      selection: max_robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 0.5
+      budget:
+        iterations: 80

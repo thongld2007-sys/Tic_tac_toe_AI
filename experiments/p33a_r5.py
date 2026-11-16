@@ -4,17 +4,22 @@ Chủ sở hữu: TV3.  Review: TV1.
 
 Cách chạy từ thư mục gốc của repo:
     python -m experiments.run configs/p33a_r5_equal_iter.yaml --workers 8
-    python -m experiments.run configs/p33a_r5_equal_time.yaml --workers 4
+    python -m experiments.run configs/p33a_r5_equal_time.yaml --workers 8
+    python -m experiments.run configs/p33a_r5_equal_time_05s.yaml --workers 8
     python -m experiments.p33a_r5
 
-Đầu vào:
+Đầu vào (dùng `c = 1.0` trên thang [-1, 1], tức `c_đề = 0.5` — tối ưu trên F2 của P3.1b):
   - `experiments/results/p33a_r5_equal_iter.csv`: đấu L0–L4 cùng 200 iteration trên Caro 9×9.
   - `experiments/results/p33a_r5_equal_time.csv`: đấu L0–L4 cùng 0.08 s/nước trên Caro 9×9.
+  - `experiments/results/p33a_r5_equal_time_05s.csv` (tùy chọn): đấu cùng 0.5 s/nước trên Caro 9×9.
 
 Đầu ra (phục vụ Bảng T6 trong báo cáo):
   - `experiments/results/p33a_r5_summary_t6.csv`: Bảng T6 phần thực chiến — tỷ lệ thắng kèm khoảng
-    tin cậy Wilson 95%, điểm trung bình kèm bootstrap CI 95%, kiểm định z hai tỷ lệ, hiệu điểm
-    bootstrap CI 95% và tốc độ mô phỏng/giây thực tế trong ván (`in_game_sims_per_s` kèm CI 95%).
+    tin cậy Wilson 95%, điểm trung bình kèm bootstrap CI 95%; nhóm `vs_l0` kiểm định z một tỷ
+    lệ so với mốc lý thuyết 50%, nhóm `head_to_head` dùng kiểm định z thắng-thua ghép cặp và
+    bootstrap ghép cặp. Lưu ý: `new_nodes_per_move` = `(a_nodes - a_moves) / a_moves` là số nút
+    mới tạo mỗi nước (có thể nhỏ hơn nhẹ so với số lần mô phỏng ở các vòng Selection chạm nút
+    kết thúc); tốc độ mô phỏng/giây chính xác nằm trong `p33a_r5_speed_t6.csv`.
   - `experiments/results/p33a_r5_e1_t6.csv`: Bảng T6 phần thế bẫy E1 (R5.3) — tần suất chọn đúng
     nước tối ưu (kèm Wilson 95% CI) và thống kê nút gốc (`N`, `W`, `W/N`, `UCT`) của L0–L4 trên
     thế bẫy E1 3×3 và hai thế bẫy chiến thuật trên bàn Caro 9×9.
@@ -38,7 +43,6 @@ from experiments.stats import (
     bootstrap_ci,
     bootstrap_diff_ci,
     summarize_matchup,
-    two_proportion_ztest,
     wilson_ci,
 )
 from src.agents.base import Budget, RootStat
@@ -69,11 +73,11 @@ T6_SUMMARY_COLUMNS: tuple[str, ...] = (
     "mean_score",
     "score_ci_low",
     "score_ci_high",
-    "sims_per_move",
+    "new_nodes_per_move",
     "time_per_move_ms",
-    "in_game_sims_per_s",
-    "sims_per_s_ci_low",
-    "sims_per_s_ci_high",
+    "new_nodes_per_s",
+    "new_nodes_per_s_ci_low",
+    "new_nodes_per_s_ci_high",
     "z_stat",
     "p_value",
     "diff_mean",
@@ -136,6 +140,16 @@ def write_csv_rows(
             writer.writerow({col: row[col] for col in columns})
 
 
+def _one_proportion_ztest(wins: int, n_games: int, p0: float = 0.5) -> tuple[float, float]:
+    """Kiểm định z một tỷ lệ so với mốc lý thuyết `p0` (mặc định 50%)."""
+    if n_games <= 0:
+        return 0.0, 1.0
+    se = math.sqrt(p0 * (1.0 - p0) / n_games)
+    z_stat = ((wins / n_games) - p0) / se
+    p_val = 2.0 * (1.0 - NormalDist(0.0, 1.0).cdf(abs(z_stat)))
+    return float(z_stat), max(0.0, min(1.0, float(p_val)))
+
+
 def _paired_win_loss_ztest(wins: int, losses: int) -> tuple[float, float]:
     """Kiểm định z ghép cặp (McNemar/sign test) cho số ván thắng-thua: z = (W - L) / sqrt(W + L)."""
     decisive = wins + losses
@@ -156,38 +170,38 @@ def _extract_budget_label(params: Mapping[str, Any]) -> tuple[str, str]:
     return "unknown", "default"
 
 
-def _compute_game_sims_metrics(rows: Sequence[Mapping[str, str]]) -> dict[str, float]:
-    """Tính số mô phỏng/nước, thời gian/nước (ms) và tốc độ `sims/s` kèm bootstrap CI 95%."""
+def _compute_game_node_metrics(rows: Sequence[Mapping[str, str]]) -> dict[str, float]:
+    """Tính số nút mới tạo mỗi nước `(nodes - moves) / moves`, thời gian (ms) và tốc độ kèm CI."""
     total_moves = sum(int(r["a_moves"]) for r in rows)
     total_nodes = sum(int(r["a_nodes"]) for r in rows)
     total_time = sum(float(r["a_time_s"]) for r in rows)
-    total_sims = max(0, total_nodes - total_moves)
+    total_new_nodes = max(0, total_nodes - total_moves)
 
-    sims_per_move = (total_sims / total_moves) if total_moves > 0 else 0.0
+    new_nodes_per_move = (total_new_nodes / total_moves) if total_moves > 0 else 0.0
     time_per_move_ms = (1000.0 * total_time / total_moves) if total_moves > 0 else 0.0
 
-    per_game_sps: list[float] = []
+    per_game_nps: list[float] = []
     for r in rows:
         t_g = float(r["a_time_s"])
         m_g = int(r["a_moves"])
         n_g = int(r["a_nodes"])
-        s_g = max(0, n_g - m_g)
+        new_g = max(0, n_g - m_g)
         if t_g > 0.0:
-            per_game_sps.append(s_g / t_g)
+            per_game_nps.append(new_g / t_g)
 
-    if per_game_sps:
-        in_game_sps = sum(per_game_sps) / len(per_game_sps)
-        sps_ci = bootstrap_ci(per_game_sps, seed=2026)
-        sps_lo, sps_hi = sps_ci.low, sps_ci.high
+    if per_game_nps:
+        new_nodes_per_s = sum(per_game_nps) / len(per_game_nps)
+        nps_ci = bootstrap_ci(per_game_nps, seed=2026)
+        nps_lo, nps_hi = nps_ci.low, nps_ci.high
     else:
-        in_game_sps, sps_lo, sps_hi = 0.0, 0.0, 0.0
+        new_nodes_per_s, nps_lo, nps_hi = 0.0, 0.0, 0.0
 
     return {
-        "sims_per_move": sims_per_move,
+        "new_nodes_per_move": new_nodes_per_move,
         "time_per_move_ms": time_per_move_ms,
-        "in_game_sims_per_s": in_game_sps,
-        "sims_per_s_ci_low": sps_lo,
-        "sims_per_s_ci_high": sps_hi,
+        "new_nodes_per_s": new_nodes_per_s,
+        "new_nodes_per_s_ci_low": nps_lo,
+        "new_nodes_per_s_ci_high": nps_hi,
     }
 
 
@@ -214,9 +228,6 @@ def summarize_r5_csv(csv_path: Path) -> list[dict[str, Any]]:
             h2h_groups.append(m_rows)
 
     out_rows: list[dict[str, Any]] = []
-    l0_rows = vs_l0_groups.get("l0", [])
-    l0_scores = [float(r["score_a"]) for r in l0_rows]
-    l0_wins = sum(r["winner"] == "a" for r in l0_rows)
 
     for pol in ROLLOUT_LEVELS:
         if pol not in vs_l0_groups:
@@ -230,15 +241,13 @@ def summarize_r5_csv(csv_path: Path) -> list[dict[str, Any]]:
         wins = int(stats["wins"])
         draws = int(stats["draws"])
         losses = int(stats["losses"])
-        sim_metrics = _compute_game_sims_metrics(rows)
+        node_metrics = _compute_game_node_metrics(rows)
 
-        if pol != "l0" and l0_rows:
-            z_stat, p_val = two_proportion_ztest(wins, n_games, l0_wins, len(l0_rows))
-            diff_mean = (sum(scores) / len(scores)) - (sum(l0_scores) / len(l0_scores))
-            diff_lo, diff_hi = bootstrap_diff_ci(scores, l0_scores, seed=2026, paired=False)
-        else:
-            z_stat, p_val = 0.0, 1.0
-            diff_mean, diff_lo, diff_hi = 0.0, 0.0, 0.0
+        # Kiểm định z một tỷ lệ so với mốc lý thuyết 50% (p0 = 0.5)
+        z_stat, p_val = _one_proportion_ztest(wins, n_games, p0=0.5)
+        diff_mean = float(stats["score_mean"]) - 0.5
+        diff_lo = float(stats["score_boot_low"]) - 0.5
+        diff_hi = float(stats["score_boot_high"]) - 0.5
 
         out_rows.append(
             {
@@ -257,11 +266,11 @@ def summarize_r5_csv(csv_path: Path) -> list[dict[str, Any]]:
                 "mean_score": round(float(stats["score_mean"]), 4),
                 "score_ci_low": round(float(stats["score_boot_low"]), 4),
                 "score_ci_high": round(float(stats["score_boot_high"]), 4),
-                "sims_per_move": round(sim_metrics["sims_per_move"], 1),
-                "time_per_move_ms": round(sim_metrics["time_per_move_ms"], 2),
-                "in_game_sims_per_s": round(sim_metrics["in_game_sims_per_s"], 1),
-                "sims_per_s_ci_low": round(sim_metrics["sims_per_s_ci_low"], 1),
-                "sims_per_s_ci_high": round(sim_metrics["sims_per_s_ci_high"], 1),
+                "new_nodes_per_move": round(node_metrics["new_nodes_per_move"], 1),
+                "time_per_move_ms": round(node_metrics["time_per_move_ms"], 2),
+                "new_nodes_per_s": round(node_metrics["new_nodes_per_s"], 1),
+                "new_nodes_per_s_ci_low": round(node_metrics["new_nodes_per_s_ci_low"], 1),
+                "new_nodes_per_s_ci_high": round(node_metrics["new_nodes_per_s_ci_high"], 1),
                 "z_stat": round(z_stat, 4),
                 "p_value": round(p_val, 4),
                 "diff_mean": round(diff_mean, 4),
@@ -284,7 +293,7 @@ def summarize_r5_csv(csv_path: Path) -> list[dict[str, Any]]:
         wins = int(stats["wins"])
         draws = int(stats["draws"])
         losses = int(stats["losses"])
-        sim_metrics = _compute_game_sims_metrics(rows)
+        node_metrics = _compute_game_node_metrics(rows)
 
         z_stat, p_val = _paired_win_loss_ztest(wins, losses)
         diff_mean = (sum(scores_a) / len(scores_a)) - (sum(scores_b) / len(scores_b))
@@ -307,11 +316,11 @@ def summarize_r5_csv(csv_path: Path) -> list[dict[str, Any]]:
                 "mean_score": round(float(stats["score_mean"]), 4),
                 "score_ci_low": round(float(stats["score_boot_low"]), 4),
                 "score_ci_high": round(float(stats["score_boot_high"]), 4),
-                "sims_per_move": round(sim_metrics["sims_per_move"], 1),
-                "time_per_move_ms": round(sim_metrics["time_per_move_ms"], 2),
-                "in_game_sims_per_s": round(sim_metrics["in_game_sims_per_s"], 1),
-                "sims_per_s_ci_low": round(sim_metrics["sims_per_s_ci_low"], 1),
-                "sims_per_s_ci_high": round(sim_metrics["sims_per_s_ci_high"], 1),
+                "new_nodes_per_move": round(node_metrics["new_nodes_per_move"], 1),
+                "time_per_move_ms": round(node_metrics["time_per_move_ms"], 2),
+                "new_nodes_per_s": round(node_metrics["new_nodes_per_s"], 1),
+                "new_nodes_per_s_ci_low": round(node_metrics["new_nodes_per_s_ci_low"], 1),
+                "new_nodes_per_s_ci_high": round(node_metrics["new_nodes_per_s_ci_high"], 1),
                 "z_stat": round(z_stat, 4),
                 "p_value": round(p_val, 4),
                 "diff_mean": round(diff_mean, 4),
@@ -327,13 +336,14 @@ def summarize_r5_table_t6(
     equal_iter_csv: Path,
     equal_time_csv: Path,
     out_csv: Path | None = None,
+    *,
+    extra_csvs: Sequence[Path] = (),
 ) -> list[dict[str, Any]]:
-    """Kết hợp hai file CSV (`equal_iter` và `equal_time`) thành Bảng T6 tổng hợp."""
+    """Kết hợp các file CSV R5 (`equal_iter`, `equal_time`, `equal_time_05s`) thành Bảng T6."""
     rows: list[dict[str, Any]] = []
-    if equal_iter_csv.exists():
-        rows.extend(summarize_r5_csv(equal_iter_csv))
-    if equal_time_csv.exists():
-        rows.extend(summarize_r5_csv(equal_time_csv))
+    for path in (equal_iter_csv, equal_time_csv, *extra_csvs):
+        if path.exists():
+            rows.extend(summarize_r5_csv(path))
     if out_csv is not None:
         write_csv_rows(out_csv, T6_SUMMARY_COLUMNS, rows)
     return rows
@@ -358,10 +368,11 @@ def _build_e1_positions() -> list[tuple[str, str, GameState, set[Move], tuple[in
     for mv in [(2, 2), (4, 3), (3, 2), (4, 4), (6, 6), (4, 5)]:
         open3_gmk9.play(mv)
 
+    # Dùng c = 1.0 trên thang thưởng [-1, 1] (tương đương c_đề = 0.5 theo F2 của P3.1b)
     return [
-        ("E1_3x3", "3x3", e1_3x3, {(2, 2)}, (10, 15, 25, 50, 100), 1.4),
-        ("E1_gomoku9_four", "9x9", e1_gmk9, {(4, 6)}, (35, 60, 100), 1.4),
-        ("Gomoku9_open_three", "9x9", open3_gmk9, {(4, 2), (4, 6)}, (60, 120), 1.4),
+        ("E1_3x3", "3x3", e1_3x3, {(2, 2)}, (10, 15, 25, 50, 100), 1.0),
+        ("E1_gomoku9_four", "9x9", e1_gmk9, {(4, 6)}, (35, 60, 100), 1.0),
+        ("Gomoku9_open_three", "9x9", open3_gmk9, {(4, 2), (4, 6)}, (60, 120), 1.0),
     ]
 
 
@@ -528,9 +539,15 @@ def generate_all_p33a(
 
     eq_iter_csv = results_dir / "p33a_r5_equal_iter.csv"
     eq_time_csv = results_dir / "p33a_r5_equal_time.csv"
-    if eq_iter_csv.exists() or eq_time_csv.exists():
+    eq_time_05s_csv = results_dir / "p33a_r5_equal_time_05s.csv"
+    if eq_iter_csv.exists() or eq_time_csv.exists() or eq_time_05s_csv.exists():
         t6_summary_path = results_dir / "p33a_r5_summary_t6.csv"
-        summarize_r5_table_t6(eq_iter_csv, eq_time_csv, out_csv=t6_summary_path)
+        summarize_r5_table_t6(
+            eq_iter_csv,
+            eq_time_csv,
+            out_csv=t6_summary_path,
+            extra_csvs=(eq_time_05s_csv,),
+        )
         outputs["T6_summary"] = t6_summary_path
 
     t6_e1_path = results_dir / "p33a_r5_e1_t6.csv"

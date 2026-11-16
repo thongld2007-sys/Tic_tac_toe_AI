@@ -1,4 +1,6 @@
 # P3.3a (R5): So sánh các chính sách rollout L0–L4 cùng số vòng lặp (iterations = 200) trên bàn Caro 9×9.
+# Tham số c = 1.0 trên thang thưởng [-1, 1] của MCTSAgent (tương đương c_đề = 0.5 trên thang [0, 1],
+# giá trị đạt tỷ lệ thắng cao nhất trong khảo sát F2 của P3.1b).
 # Chạy: python -m experiments.run configs/p33a_r5_equal_iter.yaml --workers 8
 name: p33a_r5_equal_iter
 seed: 2026
@@ -17,7 +19,7 @@ matchups:
       use_candidates: true
       candidate_radius: 2
       reuse_tree: false
-      c: 1.4
+      c: 1.0
       budget:
         iterations: 200
     b:
@@ -27,7 +29,7 @@ matchups:
       use_candidates: true
       candidate_radius: 2
       reuse_tree: false
-      c: 1.4
+      c: 1.0
       budget:
         iterations: 200
   # 2. Đối đầu trực tiếp giữa các bậc rollout liên tiếp ở cùng 200 iteration
@@ -38,7 +40,7 @@ matchups:
       use_candidates: true
       candidate_radius: 2
       reuse_tree: false
-      c: 1.4
+      c: 1.0
       budget:
         iterations: 200
     b:
@@ -48,7 +50,7 @@ matchups:
       use_candidates: true
       candidate_radius: 2
       reuse_tree: false
-      c: 1.4
+      c: 1.0
       budget:
         iterations: 200
   - a:
@@ -58,7 +60,7 @@ matchups:
       use_candidates: true
       candidate_radius: 2
       reuse_tree: false
-      c: 1.4
+      c: 1.0
       budget:
         iterations: 200
     b:
@@ -68,7 +70,7 @@ matchups:
       use_candidates: true
       candidate_radius: 2
       reuse_tree: false
-      c: 1.4
+      c: 1.0
       budget:
         iterations: 200
   - a:
@@ -78,7 +80,7 @@ matchups:
       use_candidates: true
       candidate_radius: 2
       reuse_tree: false
-      c: 1.4
+      c: 1.0
       budget:
         iterations: 200
     b:
@@ -88,7 +90,7 @@ matchups:
       use_candidates: true
       candidate_radius: 2
       reuse_tree: false
-      c: 1.4
+      c: 1.0
       budget:
         iterations: 200
   - a:
@@ -98,7 +100,7 @@ matchups:
       use_candidates: true
       candidate_radius: 2
       reuse_tree: false
-      c: 1.4
+      c: 1.0
       budget:
         iterations: 200
     b:
@@ -108,7 +110,6 @@ matchups:
       use_candidates: true
       candidate_radius: 2
       reuse_tree: false
-      c: 1.4
+      c: 1.0
       budget:
         iterations: 200
-

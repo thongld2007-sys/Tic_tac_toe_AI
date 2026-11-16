@@ -93,11 +93,12 @@ python -m experiments.plots
 
 ## So sánh các chính sách rollout L0–L4 R5 (P3.3a)
 
-Chạy thực nghiệm R5 (so sánh L0–L4 cùng số vòng lặp `iterations = 200`, cùng thời gian `time_s = 0.08` s/nước trên bàn Caro 9×9, đo tốc độ mô phỏng/giây `sims/s` và đánh giá trên thế bẫy E1) để sinh các bảng dữ liệu của Bảng `T6`:
+Chạy thực nghiệm R5 (so sánh L0–L4 cùng số vòng lặp `iterations = 200`, cùng thời gian `0.08` và `0.5` s/nước trên bàn Caro 9×9 với `c = 1.0` trên thang `[-1, 1]`, tức `c_đề = 0.5` theo F2, đo tốc độ mô phỏng/giây `sims/s` và đánh giá trên thế bẫy E1) để sinh các bảng dữ liệu của Bảng `T6`:
 
 ~~~sh
 python -m experiments.run configs/p33a_r5_equal_iter.yaml --workers 8
-python -m experiments.run configs/p33a_r5_equal_time.yaml --workers 4
+python -m experiments.run configs/p33a_r5_equal_time.yaml --workers 8
+python -m experiments.run configs/p33a_r5_equal_time_05s.yaml --workers 8
 python -m experiments.p33a_r5
 ~~~
 

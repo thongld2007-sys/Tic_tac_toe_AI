@@ -46,7 +46,7 @@ def _make_synthetic_r5_rows(mode: str) -> list[dict[str, object]]:
                     "a_params": json.dumps(
                         {
                             "type": "mcts",
-                            "c": 1.4,
+                            "c": 1.0,
                             "rollout": pol,
                             "reuse_tree": False,
                             "use_candidates": True,
@@ -56,7 +56,7 @@ def _make_synthetic_r5_rows(mode: str) -> list[dict[str, object]]:
                     "b_params": json.dumps(
                         {
                             "type": "mcts",
-                            "c": 1.4,
+                            "c": 1.0,
                             "rollout": "l0",
                             "reuse_tree": False,
                             "use_candidates": True,
@@ -96,7 +96,7 @@ def _make_synthetic_r5_rows(mode: str) -> list[dict[str, object]]:
                 "a_params": json.dumps(
                     {
                         "type": "mcts",
-                        "c": 1.4,
+                        "c": 1.0,
                         "rollout": "l4",
                         "reuse_tree": False,
                         "use_candidates": True,
@@ -106,7 +106,7 @@ def _make_synthetic_r5_rows(mode: str) -> list[dict[str, object]]:
                 "b_params": json.dumps(
                     {
                         "type": "mcts",
-                        "c": 1.4,
+                        "c": 1.0,
                         "rollout": "l3",
                         "reuse_tree": False,
                         "use_candidates": True,
@@ -160,12 +160,21 @@ def test_summarize_r5_table_t6_computes_ci_and_sims_per_second(tmp_path: Path) -
             <= float(r["score_ci_high"])
             <= 1.0
         )
-        assert float(r["in_game_sims_per_s"]) > 0.0
+        assert float(r["new_nodes_per_s"]) > 0.0
         assert (
-            float(r["sims_per_s_ci_low"])
-            <= float(r["in_game_sims_per_s"])
-            <= float(r["sims_per_s_ci_high"])
+            float(r["new_nodes_per_s_ci_low"])
+            <= float(r["new_nodes_per_s"])
+            <= float(r["new_nodes_per_s_ci_high"])
         )
+
+    # Nhóm vs_l0 so với mốc lý thuyết 50% (kiểm định z một tỷ lệ, diff_mean = mean_score - 0.5)
+    vs_l0_rows = [r for r in summary if r["category"] == "vs_l0"]
+    assert len(vs_l0_rows) == 10
+    l0_self = next(r for r in vs_l0_rows if r["rollout_a"] == "l0")
+    assert float(l0_self["win_rate"]) == pytest.approx(0.5)
+    assert float(l0_self["z_stat"]) == pytest.approx(0.0)
+    assert float(l0_self["p_value"]) == pytest.approx(1.0)
+    assert float(l0_self["diff_mean"]) == pytest.approx(0.0)
 
     # Kiểm tra dòng head_to_head (l4 vs l3) dùng bootstrap ghép cặp: diff_mean = 2 * mean_score - 1
     h2h_rows = [r for r in summary if r["category"] == "head_to_head"]

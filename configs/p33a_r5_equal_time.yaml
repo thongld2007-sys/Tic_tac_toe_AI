@@ -1,5 +1,7 @@
-# P3.3a (R5): So sánh các chính sách rollout L0–L4 cùng thời gian suy nghĩ (time_s = 0.08 s/nước) trên bàn Caro 9×9.
-# Chạy: python -m experiments.run configs/p33a_r5_equal_time.yaml --workers 4
+# P3.3a (R5): So sánh các chính sách rollout L0–L4 cùng thời gian (time_s = 0.08 s/nước) trên bàn Caro 9×9.
+# Tham số c = 1.0 trên thang thưởng [-1, 1] của MCTSAgent (tương đương c_đề = 0.5 trên thang [0, 1],
+# giá trị đạt tỷ lệ thắng cao nhất trong khảo sát F2 của P3.1b).
+# Chạy: python -m experiments.run configs/p33a_r5_equal_time.yaml --workers 8
 name: p33a_r5_equal_time
 seed: 2026
 games: 200
@@ -17,7 +19,7 @@ matchups:
       use_candidates: true
       candidate_radius: 2
       reuse_tree: false
-      c: 1.4
+      c: 1.0
       budget:
         time_s: 0.08
     b:
@@ -27,7 +29,7 @@ matchups:
       use_candidates: true
       candidate_radius: 2
       reuse_tree: false
-      c: 1.4
+      c: 1.0
       budget:
         time_s: 0.08
   # 2. Đối đầu trực tiếp giữa các bậc rollout liên tiếp ở cùng ngân sách 0.08 s/nước
@@ -38,7 +40,7 @@ matchups:
       use_candidates: true
       candidate_radius: 2
       reuse_tree: false
-      c: 1.4
+      c: 1.0
       budget:
         time_s: 0.08
     b:
@@ -48,7 +50,7 @@ matchups:
       use_candidates: true
       candidate_radius: 2
       reuse_tree: false
-      c: 1.4
+      c: 1.0
       budget:
         time_s: 0.08
   - a:
@@ -58,7 +60,7 @@ matchups:
       use_candidates: true
       candidate_radius: 2
       reuse_tree: false
-      c: 1.4
+      c: 1.0
       budget:
         time_s: 0.08
     b:
@@ -68,7 +70,7 @@ matchups:
       use_candidates: true
       candidate_radius: 2
       reuse_tree: false
-      c: 1.4
+      c: 1.0
       budget:
         time_s: 0.08
   - a:
@@ -78,7 +80,7 @@ matchups:
       use_candidates: true
       candidate_radius: 2
       reuse_tree: false
-      c: 1.4
+      c: 1.0
       budget:
         time_s: 0.08
     b:
@@ -88,7 +90,7 @@ matchups:
       use_candidates: true
       candidate_radius: 2
       reuse_tree: false
-      c: 1.4
+      c: 1.0
       budget:
         time_s: 0.08
   - a:
@@ -98,7 +100,7 @@ matchups:
       use_candidates: true
       candidate_radius: 2
       reuse_tree: false
-      c: 1.4
+      c: 1.0
       budget:
         time_s: 0.08
     b:
@@ -108,7 +110,6 @@ matchups:
       use_candidates: true
       candidate_radius: 2
       reuse_tree: false
-      c: 1.4
+      c: 1.0
       budget:
         time_s: 0.08
-

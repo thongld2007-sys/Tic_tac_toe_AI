@@ -1,0 +1,114 @@
+# P3.3a (R5): So sánh các chính sách rollout L0–L4 cùng số vòng lặp (iterations = 200) trên bàn Caro 9×9.
+# Chạy: python -m experiments.run configs/p33a_r5_equal_iter.yaml --workers 8
+name: p33a_r5_equal_iter
+seed: 2026
+games: 200
+swap_first: true
+opening_plies: 2
+game:
+  type: gomoku
+  size: 9
+matchups:
+  # 1. So sánh L0–L4 cùng 200 iteration trước cùng đối thủ chuẩn MCTS-L0 (200 iteration)
+  - a:
+      type: mcts
+      rollout: [l0, l1, l2, l3, l4]
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 1.4
+      budget:
+        iterations: 200
+    b:
+      type: mcts
+      rollout: l0
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 1.4
+      budget:
+        iterations: 200
+  # 2. Đối đầu trực tiếp giữa các bậc rollout liên tiếp ở cùng 200 iteration
+  - a:
+      type: mcts
+      rollout: l2
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 1.4
+      budget:
+        iterations: 200
+    b:
+      type: mcts
+      rollout: l1
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 1.4
+      budget:
+        iterations: 200
+  - a:
+      type: mcts
+      rollout: l3
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 1.4
+      budget:
+        iterations: 200
+    b:
+      type: mcts
+      rollout: l2
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 1.4
+      budget:
+        iterations: 200
+  - a:
+      type: mcts
+      rollout: l4
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 1.4
+      budget:
+        iterations: 200
+    b:
+      type: mcts
+      rollout: l3
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 1.4
+      budget:
+        iterations: 200
+  - a:
+      type: mcts
+      rollout: l4
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 1.4
+      budget:
+        iterations: 200
+    b:
+      type: mcts
+      rollout: l2
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 1.4
+      budget:
+        iterations: 200
+

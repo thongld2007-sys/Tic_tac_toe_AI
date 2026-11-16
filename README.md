@@ -91,10 +91,20 @@ python -m experiments.run configs/p32b_r4_9x9.yaml --workers 8
 python -m experiments.plots
 ~~~
 
+## So sánh các chính sách rollout L0–L4 R5 (P3.3a)
+
+Chạy thực nghiệm R5 (so sánh L0–L4 cùng số vòng lặp `iterations = 200`, cùng thời gian `time_s = 0.08` s/nước trên bàn Caro 9×9, đo tốc độ mô phỏng/giây `sims/s` và đánh giá trên thế bẫy E1) để sinh các bảng dữ liệu của Bảng `T6`:
+
+~~~sh
+python -m experiments.run configs/p33a_r5_equal_iter.yaml --workers 8
+python -m experiments.run configs/p33a_r5_equal_time.yaml --workers 4
+python -m experiments.p33a_r5
+~~~
+
 ## Đóng góp
 
 | Thành viên | Mã việc |
 | --- | --- |
 | TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a, P3.1b |
 | TV2 | P1.2, P2.2a, P2.2b, P3.2a, P3.2b, P6.2 |
-| TV3 | P1.3a, P1.3b, P2.3a, P2.3b, P5.3a |
+| TV3 | P1.3a, P1.3b, P2.3a, P2.3b, P3.3a, P5.3a |

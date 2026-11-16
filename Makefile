@@ -16,7 +16,7 @@ format:
 
 # Hai target dưới đây được hiện thực ở các việc sau.
 figures:
-	@echo "make figures: chua co, thuoc viec P3.2b (TV2)"; exit 1
+	$(PYTHON) -m experiments.plots
 
 demo:
 	$(PYTHON) -m src.ui.gui_core

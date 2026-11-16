@@ -206,6 +206,21 @@ def test_summarize_r4_table_t5_and_plot_pdf_generation(tmp_path: Path) -> None:
     assert len(t5_rows) > 0
     assert set(t5_rows[0].keys()) == set(T5_COLUMNS)
 
+    # Kiểm tra các cặp head-to-head dùng paired=True (d_i = 2*s_a - 1) và kiểm định (W-L)/sqrt(W+L)
+    h2h_rows = [r for r in t5_rows if r["category"] == "head_to_head"]
+    assert len(h2h_rows) == 2
+    for row in h2h_rows:
+        w, d, losses_cnt = int(row["wins"]), int(row["draws"]), int(row["losses"])
+        assert w == 4 and d == 1 and losses_cnt == 1
+        expected_z = (w - losses_cnt) / ((w + losses_cnt) ** 0.5)
+        assert float(row["vs_max_z"]) == pytest.approx(expected_z, abs=1e-4)
+        assert float(row["vs_max_diff_ci_low"]) == pytest.approx(
+            2.0 * float(row["score_ci_low"]) - 1.0, abs=2e-4
+        )
+        assert float(row["vs_max_diff_ci_high"]) == pytest.approx(
+            2.0 * float(row["score_ci_high"]) - 1.0, abs=2e-4
+        )
+
 
 def test_plot_r3_from_csv_rejects_incomplete_grid(tmp_path: Path) -> None:
     """Khi file CSV thiếu tổ hợp (c, iteration), plot_r3_from_csv ném ValueError."""

@@ -26,9 +26,11 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
+from statistics import NormalDist
 from typing import Any
 
 import matplotlib.pyplot as plt
@@ -284,6 +286,16 @@ def generate_table_t4(
     return rows
 
 
+def _paired_win_loss_ztest(wins: int, losses: int) -> tuple[float, float]:
+    """Kiểm định z ghép cặp (McNemar/sign test) cho số ván thắng-thua: z = (W - L) / sqrt(W + L)."""
+    decisive = wins + losses
+    if decisive <= 0:
+        return 0.0, 1.0
+    z_stat = (wins - losses) / math.sqrt(decisive)
+    p_val = 2.0 * (1.0 - NormalDist(0.0, 1.0).cdf(abs(z_stat)))
+    return float(z_stat), max(0.0, min(1.0, float(p_val)))
+
+
 def summarize_r4_table_t5(
     csv_3x3: Path,
     csv_9x9: Path,
@@ -400,9 +412,9 @@ def summarize_r4_table_t5(
             losses = int(stats["losses"])
             non_losses = wins + draws
             nl_low, nl_high = wilson_ci(non_losses, n_games)
-            z_stat, p_val = two_proportion_ztest(wins, n_games, losses, n_games)
+            z_stat, p_val = _paired_win_loss_ztest(wins, losses)
             diff_mean = (sum(scores_a) / len(scores_a)) - (sum(scores_b) / len(scores_b))
-            diff_lo, diff_hi = bootstrap_diff_ci(scores_a, scores_b, seed=2026)
+            diff_lo, diff_hi = bootstrap_diff_ci(scores_a, scores_b, seed=2026, paired=True)
 
             summary_rows.append(
                 {

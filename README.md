@@ -47,6 +47,19 @@ Mở giao diện chơi trực tiếp (Người vs AI, AI vs AI, đổi thuật t
 python -m src.ui.gui_core
 ```
 
+Mở giao diện kèm bảng phân tích MCTS (`make demo` chạy lệnh này). Tab "Bảng phân tích" hiện heatmap
+số lượt thăm `N` trên bàn cờ và bảng 5 nước đứng đầu tại gốc với `N`, `W`, `W/N`, UCT. Nút
+"Mở thế E1 và phân tích" nạp thế bẫy E1 trên bàn 3×3 và chạy MCTS ngay:
+
+```bash
+python -m src.ui.gui_panel
+```
+
+Thêm `--preset E1` để mở sẵn thế E1, `--position file.txt` để nạp thế cờ từ file, và
+`--headless-demo` để in bảng 5 nước ra terminal mà không mở cửa sổ. File thế cờ là danh sách nước
+(`moves: 0,1 0,0 2,0 1,1`, X đi trước, mỗi nước là `hàng,cột` tính từ 0) hoặc sơ đồ bàn cờ dùng
+`X`, `O`, `.`; chi tiết ở đầu file [src/ui/gui_panel.py](src/ui/gui_panel.py).
+
 ## Cấu trúc thư mục
 
 ```
@@ -95,6 +108,6 @@ python -m experiments.plots
 
 | Thành viên | Mã việc |
 | --- | --- |
-| TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a, P3.1b |
+| TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a, P3.1b, P6.1b |
 | TV2 | P1.2, P2.2a, P2.2b, P3.2a, P3.2b, P6.2 |
 | TV3 | P1.3a, P1.3b, P2.3a, P2.3b, P5.3a |

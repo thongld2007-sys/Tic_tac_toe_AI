@@ -91,10 +91,19 @@ python -m experiments.run configs/p32b_r4_9x9.yaml --workers 8
 python -m experiments.plots
 ~~~
 
+## Alpha-Beta vs MCTS cùng thời gian trên bàn Caro 15×15 (P3.3b)
+
+Chạy thực nghiệm đối đầu trực tiếp giữa `AlphaBetaGomoku` và `MCTS` (`L2`, `L4`) ở cùng ngân sách thời gian `0.5`, `1.0`, `2.0` s/nước trên bàn 15×15 (`swap_first=true`, `opening_plies=2`) và tổng hợp Bảng `T7` tách theo bên đi trước / đi sau:
+
+~~~sh
+python -m experiments.run configs/p33b_ab_vs_mcts.yaml --workers 8
+python -m experiments.p33b_ab_vs_mcts
+~~~
+
 ## Đóng góp
 
 | Thành viên | Mã việc |
 | --- | --- |
 | TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a, P3.1b |
 | TV2 | P1.2, P2.2a, P2.2b, P3.2a, P3.2b, P6.2 |
-| TV3 | P1.3a, P1.3b, P2.3a, P2.3b, P5.3a |
+| TV3 | P1.3a, P1.3b, P2.3a, P2.3b, P3.3b, P5.3a |

@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from experiments.plots import (
+    B2_B3_COLUMNS,
     R3_BUDGETS,
     R3_COEFFICIENTS,
     T4_COLUMNS,
@@ -18,7 +19,7 @@ from experiments.plots import (
     plot_r3_from_csv,
     write_csv_rows,
 )
-from src.agents.mcts import FINAL_SELECTIONS
+from src.agents.mcts import FINAL_SELECTIONS, UCT_VARIANTS
 
 
 def _make_synthetic_r3_rows(board: str) -> list[dict[str, object]]:
@@ -192,15 +193,62 @@ def test_summarize_r4_table_t5_and_plot_pdf_generation(tmp_path: Path) -> None:
     write_csv_rows(res_dir / "p32b_r4_3x3.csv", r4_cols, _make_synthetic_r4_rows("3x3"))
     write_csv_rows(res_dir / "p32b_r4_9x9.csv", r4_cols, _make_synthetic_r4_rows("9x9"))
 
+    # Dữ liệu giả lập cho B2/B3 (P4.2a)
+    b2_rows: list[dict[str, object]] = []
+    m_idx = 0
+    for var in UCT_VARIANTS:
+        for iters in (50, 100):
+            for g in range(4):
+                b2_rows.append(
+                    {
+                        "experiment": "p42a_b2_b3_3x3",
+                        "game": "3x3",
+                        "matchup": m_idx,
+                        "game_index": g,
+                        "seed": 4000 + g,
+                        "agent_a": f"mcts[uct_variant={var}]",
+                        "agent_b": "alphabeta",
+                        "a_params": json.dumps(
+                            {
+                                "type": "mcts",
+                                "c": 1.0,
+                                "uct_variant": var,
+                                "budget": {"iterations": iters},
+                            }
+                        ),
+                        "b_params": json.dumps({"type": "alphabeta"}),
+                        "first_player": "a" if g % 2 == 0 else "b",
+                        "opening_plies": 1,
+                        "winner": "a" if g < 2 else "draw",
+                        "score_a": 1.0 if g < 2 else 0.5,
+                        "plies": 8,
+                        "a_moves": 4,
+                        "b_moves": 4,
+                        "a_nodes": 200,
+                        "b_nodes": 50,
+                        "a_time_s": 0.01,
+                        "b_time_s": 0.002,
+                        "a_max_time_s": 0.005,
+                        "b_max_time_s": 0.001,
+                    }
+                )
+            m_idx += 1
+    write_csv_rows(res_dir / "p42a_b2_b3_3x3.csv", r4_cols, b2_rows)
+    write_csv_rows(res_dir / "p42a_b2_b3_9x9.csv", r4_cols, b2_rows)
+
     code = main(["--results-dir", str(res_dir), "--out-dir", str(fig_dir), "--t4-seeds", "10"])
     assert code == 0
 
-    for pdf_name in ("F1.pdf", "F2.pdf", "F3.pdf"):
+    for pdf_name in ("F1.pdf", "F2.pdf", "F3.pdf", "F4.pdf"):
         pdf_path = fig_dir / pdf_name
         assert pdf_path.exists()
         raw_bytes = pdf_path.read_bytes()
         assert raw_bytes.startswith(b"%PDF-")
         assert len(raw_bytes) > 1000
+
+    b2_summary = load_csv_rows(res_dir / "p42a_b2_b3_summary.csv")
+    assert len(b2_summary) > 0
+    assert set(b2_summary[0].keys()) == set(B2_B3_COLUMNS)
 
     t5_rows = load_csv_rows(res_dir / "p32b_r4_summary_t5.csv")
     assert len(t5_rows) > 0

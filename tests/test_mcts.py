@@ -12,8 +12,10 @@ from experiments.run import build_agent, normalize_config, run_experiment
 from src.agents.base import Budget
 from src.agents.mcts import (
     DEFAULT_C,
+    UCT_VARIANTS,
     MCTSAgent,
     MCTSNode,
+    compute_move_prior,
     default_rollout,
     register_rollout,
     select_final_child,
@@ -490,3 +492,85 @@ def test_mcts_custom_rollout_registration_and_rollout_depth() -> None:
     assert select_final_child(agent_two_arg.last_root, "robust").move in state.legal_moves()
     with pytest.raises(ValueError, match="selection"):
         select_final_child(agent_two_arg.last_root, "unknown")
+
+
+def test_uct_variants_b2_and_b3_formulas_and_yaml_runner() -> None:
+    """Kiểm tra công thức toán của các biến thể UCT (B2) và cải tiến UCT (B3) cùng runner YAML."""
+    root = MCTSNode(move=None, parent=None, player_just_moved=PLAYER_O, untried_moves=[])
+    root.N = 100
+    child = MCTSNode(
+        move=(1, 1),
+        parent=root,
+        player_just_moved=PLAYER_X,
+        untried_moves=[],
+        prior=0.8,
+    )
+    child.N = 16
+    child.W = 8.0
+    child.W2 = 16.0  # mọi mẫu đều có |r| = 1 -> W2 / N = 1.0
+    c = 1.0
+
+    q = 8.0 / 16.0
+    ln_np = math.log(100)
+    assert child.uct_score(c, "standard") == pytest.approx(q + c * math.sqrt(ln_np / 16.0))
+    assert child.uct_score(c, "no_sqrt") == pytest.approx(q + c * (ln_np / 16.0))
+    assert child.uct_score(c, "no_log") == pytest.approx(q + c * math.sqrt(1.0 / 16.0))
+    assert child.uct_score(c, "sqrt_n") == pytest.approx(q + c * (math.sqrt(100.0) / 17.0))
+    assert child.uct_score(c, "progressive_bias") == pytest.approx(
+        q + c * math.sqrt(ln_np / 16.0) + (c * 0.8) / 17.0
+    )
+
+    # UCB1-Tuned: khi nhánh thắng 100% (q = 1.0, phương sai mẫu = 0), điểm khám phá nhỏ hơn
+    # khi nhánh có q = 0.0 (phương sai mẫu cực đại) ở N_i lớn
+    root.N = 1000
+    sure_win = MCTSNode(move=(0, 0), parent=root, player_just_moved=PLAYER_X, untried_moves=[])
+    sure_win.N = 200
+    sure_win.W = 200.0
+    sure_win.W2 = 200.0
+
+    uncertain = MCTSNode(move=(0, 1), parent=root, player_just_moved=PLAYER_X, untried_moves=[])
+    uncertain.N = 200
+    uncertain.W = 0.0
+    uncertain.W2 = 200.0
+
+    bonus_sure = sure_win.uct_score(1.0, "ucb1_tuned") - sure_win.q
+    bonus_uncertain = uncertain.uct_score(1.0, "ucb1_tuned") - uncertain.q
+    assert bonus_sure < bonus_uncertain
+
+    # Kiểm tra compute_move_prior trên 3×3 (tâm > góc > cạnh) và trên Caro 9×9
+    ttt = TicTacToe()
+    assert compute_move_prior(ttt, (1, 1), PLAYER_X) > compute_move_prior(ttt, (0, 0), PLAYER_X)
+    assert compute_move_prior(ttt, (0, 0), PLAYER_X) > compute_move_prior(ttt, (0, 1), PLAYER_X)
+
+    gmk = Gomoku(size=9)
+    for mv in [(4, 4), (0, 0), (4, 3), (0, 1), (4, 5)]:
+        gmk.play(mv)
+    # Nước chặn/tạo chuỗi tại (4, 2) có prior cao hơn góc xa (8, 8)
+    assert compute_move_prior(gmk, (4, 2), PLAYER_O) > compute_move_prior(gmk, (8, 8), PLAYER_O)
+
+    # Mọi biến thể trong UCT_VARIANTS đều chạy được qua YAML runner
+    yaml_cfg = normalize_config(
+        yaml.safe_load(
+            """
+name: test_b2_b3_variants
+seed: 2026
+games: 2
+swap_first: true
+game: {type: tictactoe}
+matchups:
+  - a:
+      type: mcts
+      uct_variant: [standard, no_sqrt, no_log, sqrt_n, ucb1_tuned, progressive_bias]
+      c: 1.0
+      budget: {iterations: 30}
+    b: {type: random}
+"""
+        )
+    )
+    rows = run_experiment(yaml_cfg, workers=1)
+    assert len(rows) == len(UCT_VARIANTS) * 2
+
+    with pytest.raises(ValueError, match="uct_variant"):
+        MCTSAgent(uct_variant="invalid")
+    with pytest.raises(ValueError, match="uct_variant"):
+        child.uct_score(1.0, "invalid")

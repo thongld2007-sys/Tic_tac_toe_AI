@@ -91,10 +91,21 @@ python -m experiments.run configs/p32b_r4_9x9.yaml --workers 8
 python -m experiments.plots
 ~~~
 
+## Cải tiến mô phỏng B4: Nước bắt buộc mở rộng và Song song hóa theo gốc (P4.3a)
+
+Chạy thực nghiệm đánh giá trước/sau của hai cải tiến mô phỏng B4 (`l2_b4`, `l3_b4`, `l4_b4` với thứ tự ưu tiên 4 tầng: thắng 1 bước → chặn thắng 1 bước / dừng sớm khi bị dọa đôi → tạo Bốn hở hai đầu / nước đôi 4-4 → chặn đối thủ tạo Bốn hở hai đầu; và `RootParallelMCTSAgent` song song hóa theo gốc với $K \in \{1, 2, 4\}$ worker):
+
+~~~sh
+python -m experiments.run configs/p43a_b4_9x9.yaml --workers 4 --out experiments/results/p43a_b4_9x9.csv
+python -m experiments.p43a_b4
+~~~
+
+Kết quả ván đấu nằm tại `experiments/results/p43a_b4_9x9.csv`; bảng tổng hợp điểm trước/sau (kèm khoảng tin cậy Wilson 95%, bootstrap 95% và kiểm định $z$) nằm tại `experiments/results/p43a_b4_summary.csv`; bảng tốc độ mô phỏng (`rollout_sims_per_s`, `mcts_sims_per_s`) và tỷ lệ giải bẫy Ba hở hai đầu trước/sau trên bàn 9×9 và 15×15 nằm tại `experiments/results/p43a_b4_speed.csv`.
+
 ## Đóng góp
 
 | Thành viên | Mã việc |
 | --- | --- |
 | TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a, P3.1b |
 | TV2 | P1.2, P2.2a, P2.2b, P3.2a, P3.2b, P6.2 |
-| TV3 | P1.3a, P1.3b, P2.3a, P2.3b, P5.3a |
+| TV3 | P1.3a, P1.3b, P2.3a, P2.3b, P4.3a, P5.3a |

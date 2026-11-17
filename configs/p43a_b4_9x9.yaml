@@ -1,0 +1,193 @@
+# P4.3a — Bonus B4: Cải tiến mô phỏng (Nước bắt buộc mở rộng & Song song hóa theo gốc)
+# Chủ sở hữu: TV3. Review: TV1.
+#
+# Lưu ý về hằng số khám phá UCT:
+#   Theo quy ước của src/agents/mcts.py (và P3.1b - Hình F2), giá trị mô phỏng q nằm trong
+#   khoảng [-1, +1] nên c_code = 2 * c_đề. Ở đây chọn c = 1.0 (tương ứng c_đề = 0.5 đã khảo
+#   sát tại Hình F2 của P3.1b).
+#
+# Các cặp đấu trên bàn Caro 9×9 (luật chuẩn 5 quân liên tiếp, 200 ván/cặp, đổi bên đi trước,
+# khai cuộc ngẫu nhiên 2 ply):
+#   1. Đối đầu trực tiếp Trước vs Sau cùng ngân sách số lượt mô phỏng (iterations = 200):
+#        - l2_b4 vs l2
+#        - l3_b4 vs l3
+#        - l4_b4 vs l4
+#   2. Đối đầu trực tiếp Trước vs Sau cùng ngân sách thời gian (time_s = 0.08 s/nước):
+#        - l2_b4 vs l2
+#        - l3_b4 vs l3
+#        - l4_b4 vs l4
+#   3. Đấu với mốc cơ sở L0 cùng ngân sách số lượt mô phỏng (iterations = 200):
+#        - l2 vs l0, l2_b4 vs l0
+#        - l3 vs l0, l3_b4 vs l0
+#        - l4 vs l0, l4_b4 vs l0
+
+name: p43a_b4_9x9
+seed: 2026
+games: 200
+swap_first: true
+opening_plies: 2
+
+game:
+  type: gomoku
+  size: 9
+  win_length: 5
+  block_two_ends: false
+
+matchups:
+  # 1. Đối đầu trực tiếp Trước vs Sau — Cùng số lượt mô phỏng (iterations = 200)
+  - a:
+      type: mcts
+      rollout: l2_b4
+      c: 1.0
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      budget:
+        iterations: 200
+    b:
+      type: mcts
+      rollout: l2
+      c: 1.0
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      budget:
+        iterations: 200
+
+  - a:
+      type: mcts
+      rollout: l3_b4
+      c: 1.0
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      budget:
+        iterations: 200
+    b:
+      type: mcts
+      rollout: l3
+      c: 1.0
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      budget:
+        iterations: 200
+
+  - a:
+      type: mcts
+      rollout: l4_b4
+      rollout_depth: 8
+      c: 1.0
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      budget:
+        iterations: 200
+    b:
+      type: mcts
+      rollout: l4
+      rollout_depth: 8
+      c: 1.0
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      budget:
+        iterations: 200
+
+  # 2. Đối đầu trực tiếp Trước vs Sau — Cùng thời gian (time_s = 0.08 s/nước)
+  - a:
+      type: mcts
+      rollout: l2_b4
+      c: 1.0
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      budget:
+        time_s: 0.08
+    b:
+      type: mcts
+      rollout: l2
+      c: 1.0
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      budget:
+        time_s: 0.08
+
+  - a:
+      type: mcts
+      rollout: l3_b4
+      c: 1.0
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      budget:
+        time_s: 0.08
+    b:
+      type: mcts
+      rollout: l3
+      c: 1.0
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      budget:
+        time_s: 0.08
+
+  - a:
+      type: mcts
+      rollout: l4_b4
+      rollout_depth: 8
+      c: 1.0
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      budget:
+        time_s: 0.08
+    b:
+      type: mcts
+      rollout: l4
+      rollout_depth: 8
+      c: 1.0
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      budget:
+        time_s: 0.08
+
+  # 3. Đấu với mốc cơ sở L0 (Trước vs Sau) — Cùng số lượt mô phỏng (iterations = 200)
+  - a:
+      type: mcts
+      rollout: [l2, l2_b4, l3, l3_b4]
+      c: 1.0
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      budget:
+        iterations: 200
+    b:
+      type: mcts
+      rollout: l0
+      c: 1.0
+      use_candidates: false
+      reuse_tree: false
+      budget:
+        iterations: 200
+
+  - a:
+      type: mcts
+      rollout: [l4, l4_b4]
+      rollout_depth: 8
+      c: 1.0
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      budget:
+        iterations: 200
+    b:
+      type: mcts
+      rollout: l0
+      c: 1.0
+      use_candidates: false
+      reuse_tree: false
+      budget:
+        iterations: 200

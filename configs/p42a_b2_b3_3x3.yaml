@@ -1,0 +1,43 @@
+# P4.2a (Bonus B2 & B3): Khảo sát các biến thể UCT (standard, no_sqrt, no_log, sqrt_n)
+# và các cải tiến UCT (ucb1_tuned, progressive_bias) trên bàn Tic-Tac-Toe 3×3.
+# Giao thức giống R3: 200 ván mỗi cấu hình, đổi lượt đi trước (swap_first: true), c_code = 1.0 (c_[0,1] = 0.5).
+# Chạy: python -m experiments.run configs/p42a_b2_b3_3x3.yaml --workers 8
+name: p42a_b2_b3_3x3
+seed: 2026
+games: 200
+swap_first: true
+opening_plies: 1
+game:
+  type: tictactoe
+matchups:
+  # 1. Đấu với Alpha-Beta hoàn hảo qua các mức ngân sách mô phỏng
+  - a:
+      type: mcts
+      rollout: l0
+      selection: robust
+      uct_variant: [standard, no_sqrt, no_log, sqrt_n, ucb1_tuned, progressive_bias]
+      use_candidates: false
+      reuse_tree: false
+      c: 1.0
+      budget:
+        iterations: [50, 100, 250, 500, 1000]
+    b:
+      type: alphabeta
+      ordering: natural
+  # 2. Đối đầu trực tiếp với UCT chuẩn (standard) tại cùng ngân sách N = 100
+  - a:
+      type: mcts
+      rollout: l0
+      selection: robust
+      uct_variant: [no_sqrt, no_log, sqrt_n, ucb1_tuned, progressive_bias]
+      c: 1.0
+      budget:
+        iterations: 100
+    b:
+      type: mcts
+      rollout: l0
+      selection: robust
+      uct_variant: standard
+      c: 1.0
+      budget:
+        iterations: 100

@@ -536,9 +536,9 @@ class AnalysisPanel:
 
         preset_bar = ttk.Frame(parent)
         preset_bar.grid(row=4, column=0, sticky="ew", pady=2)
-        ttk.Button(
-            preset_bar, text="Mở thế E1 và phân tích", command=self.on_open_e1
-        ).pack(side=tk.LEFT)
+        ttk.Button(preset_bar, text="Mở thế E1 và phân tích", command=self.on_open_e1).pack(
+            side=tk.LEFT
+        )
         ttk.Combobox(
             preset_bar,
             textvariable=self.preset_var,
@@ -586,8 +586,7 @@ class AnalysisPanel:
         self.tree.delete(*self.tree.get_children())
         if analysis is None:
             self.source_var.set(
-                "Chưa có số liệu MCTS cho thế này. Bấm “Phân tích” để chạy MCTS trên thế "
-                "hiện tại."
+                "Chưa có số liệu MCTS cho thế này. Bấm “Phân tích” để chạy MCTS trên thế hiện tại."
             )
         else:
             total = sum(row.n for row in analysis.rows)

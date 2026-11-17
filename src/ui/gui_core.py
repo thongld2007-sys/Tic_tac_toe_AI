@@ -41,7 +41,7 @@ from typing import Any
 from src.agents.alphabeta import ORDERINGS, AlphaBetaAgent
 from src.agents.alphabeta_gomoku import AlphaBetaGomoku
 from src.agents.base import Agent, AgentStats, Budget
-from src.agents.mcts import FINAL_SELECTIONS, ROLLOUT_POLICIES, MCTSAgent
+from src.agents.mcts import FINAL_SELECTIONS, ROLLOUT_POLICIES, UCT_VARIANTS, MCTSAgent
 from src.agents.minimax import MinimaxAgent
 from src.agents.random_agent import RandomAgent
 from src.games.base import DRAW, EMPTY, PLAYER_O, PLAYER_X, GameState, Move
@@ -167,6 +167,7 @@ class PlayerConfig:
     # Tham số MCTS
     c: float = math.sqrt(2.0)
     selection: str = "robust"
+    uct_variant: str = "standard"
     rollout: str = "l2"
     rollout_depth: int | None = None
     use_candidates: bool = True
@@ -225,6 +226,13 @@ class PlayerConfig:
                 f"selection phải thuộc {FINAL_SELECTIONS}, nhận được {self.selection!r}"
             )
         object.__setattr__(self, "selection", sel)
+
+        uvar = self.uct_variant.strip().lower()
+        if uvar not in UCT_VARIANTS:
+            raise ValueError(
+                f"uct_variant phải thuộc {UCT_VARIANTS}, nhận được {self.uct_variant!r}"
+            )
+        object.__setattr__(self, "uct_variant", uvar)
 
         rollout_key = self.rollout.strip().lower()
         allowed_rollouts = available_rollout_policies()
@@ -392,6 +400,7 @@ def build_agent_for_state(
             MCTSAgent(
                 c=cfg.c,
                 selection=cfg.selection,
+                uct_variant=cfg.uct_variant,
                 rollout=cfg.rollout,
                 rollout_depth=cfg.rollout_depth,
                 use_candidates=cfg.use_candidates,

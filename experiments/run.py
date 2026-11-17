@@ -169,6 +169,7 @@ def _build_alphabeta_gomoku(params: Mapping[str, Any], seed: int) -> Agent:
 MCTS_PARAMS = (
     "c",
     "selection",
+    "uct_variant",
     "rollout",
     "rollout_depth",
     "use_candidates",

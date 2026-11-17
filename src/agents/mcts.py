@@ -198,7 +198,8 @@ class MCTSNode:
         - `"no_sqrt"` (B2): W_i / N_i + c * (ln(N_p) / N_i)
         - `"no_log"` (B2): W_i / N_i + c * sqrt(1 / N_i)
         - `"sqrt_n"` (B2): W_i / N_i + c * sqrt(N_p) / (1 + N_i)
-        - `"ucb1_tuned"` (B3): W_i / N_i + c * sqrt((ln(N_p) / N_i) * min(1, 4 * V_i))
+        - `"ucb1_tuned"` (B3): W_i / N_i + c * sqrt((ln(N_p) / N_i) * scale),
+          với scale = min(1, 2 * Var_unit + 0.5 * sqrt(ln(N_p) / N_i)) (Var_unit trong [0, 0.25])
         - `"progressive_bias"` (B3): W_i / N_i + c * sqrt(ln(N_p) / N_i) + c * H_i / (1 + N_i)
         """
         if self.N == 0:

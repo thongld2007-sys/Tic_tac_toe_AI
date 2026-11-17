@@ -8,13 +8,15 @@ Cách chạy từ thư mục gốc của repo:
 
 Đầu vào:
   - `experiments/results/p33b_ab_vs_mcts.csv`: kết quả đấu từng ván trên bàn Caro 15×15 ở ba mức
-    ngân sách thời gian `0.5`, `1.0`, `2.0` s/nước (`swap_first=True`, `opening_plies=2`).
+    ngân sách thời gian `0.5`, `1.0`, `2.0` s/nước (`swap_first=True`, `opening_plies=2`, dùng
+    `c = 1.0` trên thang [-1, 1] tương đương `c_đề = 0.5` theo khảo sát F2 của P3.1b).
 
 Đầu ra (phục vụ Bảng T7 trong báo cáo):
   - `experiments/results/p33b_ab_vs_mcts_t7.csv`: tổng hợp toàn phần và tách riêng theo bên đi
     trước (`overall`, `ab_first`, `mcts_first`) cho từng mức thời gian và từng biến thể MCTS, kèm
     khoảng tin cậy Wilson 95%, bootstrap CI 95% cho điểm trung bình, kiểm định z thắng-thua ghép
-    cặp và thống kê thời gian / số nút / độ dài ván.
+    cặp và thống kê thời gian / phần trăm sử dụng ngân sách (`ab_time_pct`, `mcts_time_pct`) /
+    số nút / độ dài ván.
 """
 
 from __future__ import annotations
@@ -66,6 +68,8 @@ T7_COLUMNS: tuple[str, ...] = (
     "mcts_nodes_per_move",
     "ab_avg_time_ms",
     "mcts_avg_time_ms",
+    "ab_time_pct",
+    "mcts_time_pct",
     "ab_max_time_s",
     "mcts_max_time_s",
 )
@@ -166,6 +170,12 @@ def _summarize_slice(
         "mcts_nodes_per_move": round(total_mcts_nodes / max(1, total_mcts_moves), 1),
         "ab_avg_time_ms": round(1000.0 * total_ab_time / max(1, total_ab_moves), 2),
         "mcts_avg_time_ms": round(1000.0 * total_mcts_time / max(1, total_mcts_moves), 2),
+        "ab_time_pct": round(
+            100.0 * (total_ab_time / max(1, total_ab_moves)) / max(1e-9, time_s), 1
+        ),
+        "mcts_time_pct": round(
+            100.0 * (total_mcts_time / max(1, total_mcts_moves)) / max(1e-9, time_s), 1
+        ),
         "ab_max_time_s": round(ab_max_t, 4),
         "mcts_max_time_s": round(mcts_max_t, 4),
     }

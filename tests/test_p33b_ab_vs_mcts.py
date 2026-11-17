@@ -37,7 +37,7 @@ def _make_synthetic_p33b_rows() -> list[dict[str, object]]:
                         "game_index": g,
                         "seed": 5000 + matchup * 100 + g,
                         "agent_a": f"alphabeta_gomoku[time_s={time_s}]",
-                        "agent_b": f"mcts[c=0.5,rollout={rollout},time_s={time_s}]",
+                        "agent_b": f"mcts[c=1.0,rollout={rollout},time_s={time_s}]",
                         "a_params": json.dumps(
                             {
                                 "type": "alphabeta_gomoku",
@@ -49,7 +49,7 @@ def _make_synthetic_p33b_rows() -> list[dict[str, object]]:
                         "b_params": json.dumps(
                             {
                                 "type": "mcts",
-                                "c": 0.5,
+                                "c": 1.0,
                                 "rollout": rollout,
                                 "selection": "robust",
                                 "use_candidates": True,
@@ -121,6 +121,8 @@ def test_summarize_p33b_table_t7_splits_by_first_mover(tmp_path: Path) -> None:
         assert float(r["diff_mean"]) == pytest.approx(
             2.0 * float(r["ab_mean_score"]) - 1.0, abs=1e-3
         )
+        assert float(r["ab_time_pct"]) == pytest.approx(85.0)
+        assert float(r["mcts_time_pct"]) == pytest.approx(100.0)
 
 
 def test_summarize_p33b_rejects_empty_or_wrong_matchup(tmp_path: Path) -> None:

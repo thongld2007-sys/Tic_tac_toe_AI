@@ -93,7 +93,7 @@ python -m experiments.plots
 
 ## Alpha-Beta vs MCTS cùng thời gian trên bàn Caro 15×15 (P3.3b)
 
-Chạy thực nghiệm đối đầu trực tiếp giữa `AlphaBetaGomoku` và `MCTS` (`L2`, `L4`) ở cùng ngân sách thời gian `0.5`, `1.0`, `2.0` s/nước trên bàn 15×15 (`swap_first=true`, `opening_plies=2`) và tổng hợp Bảng `T7` tách theo bên đi trước / đi sau:
+Chạy thực nghiệm đối đầu trực tiếp giữa `AlphaBetaGomoku` và `MCTS` (`L2`, `L4`, dùng `c = 1.0` trên thang `[-1, 1]` tức `c_đề = 0.5` theo `F2`) ở cùng ngân sách thời gian `0.5`, `1.0`, `2.0` s/nước trên bàn 15×15 (`swap_first=true`, `opening_plies=2`) và tổng hợp Bảng `T7` tách theo bên đi trước / đi sau:
 
 ~~~sh
 python -m experiments.run configs/p33b_ab_vs_mcts.yaml --workers 8

@@ -43,7 +43,7 @@ from experiments.stats import (
     wilson_ci,
 )
 from src.agents.base import Budget, RootStat
-from src.agents.mcts import FINAL_SELECTIONS, MCTSAgent, select_final_child
+from src.agents.mcts import FINAL_SELECTIONS, UCT_VARIANTS, MCTSAgent, select_final_child
 from src.games.base import GameState, Move
 from src.games.gomoku import Gomoku
 from src.games.tictactoe import TicTacToe
@@ -65,6 +65,49 @@ SELECTION_MARKERS: dict[str, str] = {
     "max": "s",
     "max_robust": "^",
 }
+
+UCT_VARIANT_LABELS: dict[str, str] = {
+    "standard": "Standard UCT",
+    "no_sqrt": "No-Sqrt (B2)",
+    "no_log": "No-Log (B2)",
+    "sqrt_n": "Sqrt-N / PUCT (B2)",
+    "ucb1_tuned": "UCB1-Tuned (B3)",
+    "progressive_bias": "Progressive Bias (B3)",
+}
+UCT_VARIANT_MARKERS: dict[str, str] = {
+    "standard": "o",
+    "no_sqrt": "s",
+    "no_log": "^",
+    "sqrt_n": "v",
+    "ucb1_tuned": "D",
+    "progressive_bias": "P",
+}
+
+B2_B3_COLUMNS: tuple[str, ...] = (
+    "board",
+    "category",
+    "variant_a",
+    "variant_b",
+    "iterations",
+    "games",
+    "wins",
+    "draws",
+    "losses",
+    "win_rate",
+    "win_ci_low",
+    "win_ci_high",
+    "non_loss_rate",
+    "non_loss_ci_low",
+    "non_loss_ci_high",
+    "mean_score",
+    "score_ci_low",
+    "score_ci_high",
+    "vs_std_z",
+    "vs_std_p",
+    "vs_std_diff_mean",
+    "vs_std_diff_ci_low",
+    "vs_std_diff_ci_high",
+)
 
 T4_COLUMNS: tuple[str, ...] = (
     "position",
@@ -449,6 +492,164 @@ def summarize_r4_table_t5(
     return summary_rows
 
 
+def summarize_b2_b3_table(
+    csv_3x3: Path,
+    csv_9x9: Path,
+    out_csv: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Tổng hợp kết quả thực nghiệm B2 (biến thể UCT) & B3 (cải tiến UCT) từ CSV (`P4.2a`)."""
+    summary_rows: list[dict[str, Any]] = []
+
+    for board_label, path in (("3x3", csv_3x3), ("9x9", csv_9x9)):
+        raw_rows = load_csv_rows(path)
+        by_matchup: dict[int, list[dict[str, str]]] = defaultdict(list)
+        for r in raw_rows:
+            by_matchup[int(r["matchup"])].append(r)
+
+        vs_baseline_groups: dict[tuple[str, int], list[dict[str, str]]] = {}
+        h2h_groups: list[list[dict[str, str]]] = []
+
+        for m_id in sorted(by_matchup.keys()):
+            m_rows = by_matchup[m_id]
+            a_params = json.loads(m_rows[0]["a_params"])
+            b_params = json.loads(m_rows[0]["b_params"])
+            var_a = str(a_params.get("uct_variant", "standard"))
+            iters_a = int(a_params["budget"]["iterations"])
+
+            is_h2h_3x3 = (
+                board_label == "3x3"
+                and b_params.get("type") == "mcts"
+                and int(b_params.get("budget", {}).get("iterations", -1)) == iters_a
+                and str(b_params.get("uct_variant", "standard")) != var_a
+            )
+            if is_h2h_3x3:
+                h2h_groups.append(m_rows)
+            else:
+                vs_baseline_groups[(var_a, iters_a)] = m_rows
+                # Trên 9×9, ở mức N = 80 đấu với standard(N=80) cũng đồng thời là head-to-head
+                if (
+                    board_label == "9x9"
+                    and b_params.get("type") == "mcts"
+                    and int(b_params.get("budget", {}).get("iterations", -1)) == iters_a
+                    and var_a != "standard"
+                ):
+                    h2h_groups.append(m_rows)
+
+        budgets = sorted({it for _, it in vs_baseline_groups.keys()})
+        for iters in budgets:
+            std_rows = vs_baseline_groups.get(("standard", iters), [])
+            std_scores = [float(r["score_a"]) for r in std_rows]
+            std_non_losses = sum(r["winner"] in ("a", "draw") for r in std_rows)
+            std_wins = sum(r["winner"] == "a" for r in std_rows)
+
+            for var in UCT_VARIANTS:
+                if (var, iters) not in vs_baseline_groups:
+                    continue
+                rows = vs_baseline_groups[(var, iters)]
+                scores = [float(r["score_a"]) for r in rows]
+                stats = summarize_matchup(scores, seed=2026)
+                n_games = int(stats["games"])
+                wins = int(stats["wins"])
+                draws = int(stats["draws"])
+                losses = int(stats["losses"])
+                non_losses = wins + draws
+                nl_low, nl_high = wilson_ci(non_losses, n_games)
+
+                if var != "standard" and std_rows:
+                    if board_label == "3x3":
+                        z_stat, p_val = two_proportion_ztest(
+                            non_losses, n_games, std_non_losses, len(std_rows)
+                        )
+                    else:
+                        z_stat, p_val = two_proportion_ztest(wins, n_games, std_wins, len(std_rows))
+                    diff_mean = (sum(scores) / len(scores)) - (sum(std_scores) / len(std_scores))
+                    diff_lo, diff_hi = bootstrap_diff_ci(scores, std_scores, seed=2026)
+                else:
+                    z_stat, p_val = 0.0, 1.0
+                    diff_mean, diff_lo, diff_hi = 0.0, 0.0, 0.0
+
+                b_type = json.loads(rows[0]["b_params"]).get("type", "baseline")
+                summary_rows.append(
+                    {
+                        "board": board_label,
+                        "category": "vs_baseline",
+                        "variant_a": var,
+                        "variant_b": str(b_type),
+                        "iterations": iters,
+                        "games": n_games,
+                        "wins": wins,
+                        "draws": draws,
+                        "losses": losses,
+                        "win_rate": round(float(stats["win_rate"]), 4),
+                        "win_ci_low": round(float(stats["win_wilson_low"]), 4),
+                        "win_ci_high": round(float(stats["win_wilson_high"]), 4),
+                        "non_loss_rate": round(non_losses / n_games, 4),
+                        "non_loss_ci_low": round(nl_low, 4),
+                        "non_loss_ci_high": round(nl_high, 4),
+                        "mean_score": round(float(stats["score_mean"]), 4),
+                        "score_ci_low": round(float(stats["score_boot_low"]), 4),
+                        "score_ci_high": round(float(stats["score_boot_high"]), 4),
+                        "vs_std_z": round(z_stat, 4),
+                        "vs_std_p": round(p_val, 4),
+                        "vs_std_diff_mean": round(diff_mean, 4),
+                        "vs_std_diff_ci_low": round(diff_lo, 4),
+                        "vs_std_diff_ci_high": round(diff_hi, 4),
+                    }
+                )
+
+        for rows in h2h_groups:
+            a_params = json.loads(rows[0]["a_params"])
+            b_params = json.loads(rows[0]["b_params"])
+            var_a = str(a_params.get("uct_variant", "standard"))
+            var_b = str(b_params.get("uct_variant", "standard"))
+            iters = int(a_params["budget"]["iterations"])
+
+            scores_a = [float(r["score_a"]) for r in rows]
+            scores_b = [1.0 - s for s in scores_a]
+            stats = summarize_matchup(scores_a, seed=2026)
+            n_games = int(stats["games"])
+            wins = int(stats["wins"])
+            draws = int(stats["draws"])
+            losses = int(stats["losses"])
+            non_losses = wins + draws
+            nl_low, nl_high = wilson_ci(non_losses, n_games)
+            z_stat, p_val = _paired_win_loss_ztest(wins, losses)
+            diff_mean = (sum(scores_a) / len(scores_a)) - (sum(scores_b) / len(scores_b))
+            diff_lo, diff_hi = bootstrap_diff_ci(scores_a, scores_b, seed=2026, paired=True)
+
+            summary_rows.append(
+                {
+                    "board": board_label,
+                    "category": "head_to_head",
+                    "variant_a": var_a,
+                    "variant_b": var_b,
+                    "iterations": iters,
+                    "games": n_games,
+                    "wins": wins,
+                    "draws": draws,
+                    "losses": losses,
+                    "win_rate": round(float(stats["win_rate"]), 4),
+                    "win_ci_low": round(float(stats["win_wilson_low"]), 4),
+                    "win_ci_high": round(float(stats["win_wilson_high"]), 4),
+                    "non_loss_rate": round(non_losses / n_games, 4),
+                    "non_loss_ci_low": round(nl_low, 4),
+                    "non_loss_ci_high": round(nl_high, 4),
+                    "mean_score": round(float(stats["score_mean"]), 4),
+                    "score_ci_low": round(float(stats["score_boot_low"]), 4),
+                    "score_ci_high": round(float(stats["score_boot_high"]), 4),
+                    "vs_std_z": round(z_stat, 4),
+                    "vs_std_p": round(p_val, 4),
+                    "vs_std_diff_mean": round(diff_mean, 4),
+                    "vs_std_diff_ci_low": round(diff_lo, 4),
+                    "vs_std_diff_ci_high": round(diff_hi, 4),
+                }
+            )
+
+    if out_csv is not None:
+        write_csv_rows(out_csv, B2_B3_COLUMNS, summary_rows)
+    return summary_rows
+
+
 # ---------------------------------------------------------------------------
 # Vẽ biểu đồ vector PDF (F1, F2, F3)
 # ---------------------------------------------------------------------------
@@ -587,6 +788,86 @@ def plot_r4_selection_figure(
     plt.close(fig)
 
 
+def plot_b2_b3_variants_figure(
+    b2_rows: Sequence[Mapping[str, Any]],
+    out_pdf: Path,
+) -> None:
+    """Vẽ biểu đồ vector PDF `F4.pdf` so sánh các biến thể (B2) & cải tiến UCT (B3)."""
+    fig, axes = plt.subplots(1, 2, figsize=(11.6, 4.4), layout="constrained")
+
+    configs = [
+        (
+            axes[0],
+            "3x3",
+            "non_loss_rate",
+            "non_loss_ci_low",
+            "non_loss_ci_high",
+            "Tic-Tac-Toe 3×3 · UCT Variants & Improvements vs Alpha-Beta",
+            "Non-losing rate: Win + Draw (%)",
+        ),
+        (
+            axes[1],
+            "9x9",
+            "win_rate",
+            "win_ci_low",
+            "win_ci_high",
+            "Gomoku 9×9 · UCT Variants & Improvements vs Standard UCT (N=80)",
+            "Win rate (%)",
+        ),
+    ]
+
+    for ax, board_label, rate_col, lo_col, hi_col, subtitle, ylabel in configs:
+        sub_rows = [
+            r for r in b2_rows if r["board"] == board_label and r["category"] == "vs_baseline"
+        ]
+        budgets = sorted({int(r["iterations"]) for r in sub_rows})
+        by_key = {(str(r["variant_a"]), int(r["iterations"])): r for r in sub_rows}
+
+        for var in UCT_VARIANTS:
+            xs: list[int] = []
+            rates: list[float] = []
+            lows: list[float] = []
+            highs: list[float] = []
+            for n in budgets:
+                if (var, n) not in by_key:
+                    continue
+                item = by_key[(var, n)]
+                rate = float(item[rate_col])
+                lo = float(item[lo_col])
+                hi = float(item[hi_col])
+                xs.append(n)
+                rates.append(rate * 100.0)
+                lows.append(max(0.0, rate - lo) * 100.0)
+                highs.append(max(0.0, hi - rate) * 100.0)
+            if xs:
+                ax.errorbar(
+                    xs,
+                    rates,
+                    yerr=[lows, highs],
+                    label=UCT_VARIANT_LABELS[var],
+                    marker=UCT_VARIANT_MARKERS[var],
+                    capsize=2,
+                    linewidth=1.3,
+                    markersize=4,
+                )
+
+        ax.set_xscale("log")
+        if budgets:
+            ax.set_xticks(budgets, labels=[str(n) for n in budgets])
+        ax.xaxis.set_minor_formatter(plt.NullFormatter())
+        ax.set(
+            title=subtitle,
+            xlabel="Iterations per MCTS move (log scale)",
+            ylabel=ylabel,
+        )
+        ax.grid(axis="y", alpha=0.25)
+        ax.legend(fontsize=8)
+
+    out_pdf.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_pdf, bbox_inches="tight", metadata={"CreationDate": None})
+    plt.close(fig)
+
+
 def generate_all(
     *,
     results_dir: Path = RESULTS_DIR,
@@ -635,6 +916,18 @@ def generate_all(
         f3_path = figures_dir / "F3.pdf"
         plot_r4_selection_figure(t5_rows, f3_path)
         outputs["F3"] = f3_path
+
+    # 4. Bảng tổng hợp và Hình F4 (P4.2a: Bonus B2 biến thể UCT & B3 cải tiến UCT)
+    b2_3x3 = results_dir / "p42a_b2_b3_3x3.csv"
+    b2_9x9 = results_dir / "p42a_b2_b3_9x9.csv"
+    if b2_3x3.exists() and b2_9x9.exists():
+        b2_summary_path = results_dir / "p42a_b2_b3_summary.csv"
+        b2_rows = summarize_b2_b3_table(b2_3x3, b2_9x9, out_csv=b2_summary_path)
+        outputs["B2_B3"] = b2_summary_path
+
+        f4_path = figures_dir / "F4.pdf"
+        plot_b2_b3_variants_figure(b2_rows, f4_path)
+        outputs["F4"] = f4_path
 
     return outputs
 

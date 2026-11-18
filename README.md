@@ -81,31 +81,34 @@ Hình ghi c theo thang thưởng [0, 1]. Runner ghi c thực sự truyền cho a
 Vì Q_code = 2 Q_đề − 1, chọn c_code = 2 c_đề khiến UCT_code = 2 UCT_đề − 1,
 giữ cùng thứ tự ưu tiên giữa các nước đã thăm.
 
-## So sánh quy tắc chọn nước cuối R4 và sinh toàn bộ hình vẽ (P3.2b)
+## So sánh quy tắc chọn nước cuối R4, biến thể/cải tiến UCT (B2/B3) và sinh hình vẽ (P3.2b, P4.2a)
 
-Chạy thực nghiệm R4 (so sánh `robust`, `max`, `max_robust` trên bàn 3×3 và Caro 9×9) và sinh toàn bộ biểu đồ vector PDF (`F1.pdf`, `F2.pdf`, `F3.pdf`) cùng bảng `T4`, `T5`:
+Chạy thực nghiệm R4 (so sánh `robust`, `max`, `max_robust`), thực nghiệm Bonus B2/B3 (các biến thể UCT `standard`, `no_sqrt`, `no_log`, `sqrt_n` và cải tiến `ucb1_tuned`, `progressive_bias`) trên bàn 3×3 và Caro 9×9, rồi sinh toàn bộ biểu đồ vector PDF (`F1.pdf`..`F4.pdf`) cùng các bảng thống kê:
 
 ~~~sh
 python -m experiments.run configs/p32b_r4_3x3.yaml --workers 8
 python -m experiments.run configs/p32b_r4_9x9.yaml --workers 8
+python -m experiments.run configs/p42a_b2_b3_3x3.yaml --workers 8
+python -m experiments.run configs/p42a_b2_b3_9x9.yaml --workers 8
 python -m experiments.plots
 ~~~
 
 ## Cải tiến mô phỏng B4: Nước bắt buộc mở rộng và Song song hóa theo gốc (P4.3a)
 
-Chạy thực nghiệm đánh giá trước/sau của hai cải tiến mô phỏng B4 (`l2_b4`, `l3_b4`, `l4_b4` với thứ tự ưu tiên 4 tầng: thắng 1 bước → chặn thắng 1 bước / dừng sớm khi bị dọa đôi → tạo Bốn hở hai đầu / nước đôi 4-4 → chặn đối thủ tạo Bốn hở hai đầu; và `RootParallelMCTSAgent` song song hóa theo gốc với $K \in \{1, 2, 4\}$ worker):
+Chạy thực nghiệm đánh giá trước/sau của hai cải tiến mô phỏng B4 (`l2_b4`, `l3_b4`, `l4_b4` với thứ tự ưu tiên 4 tầng: thắng 1 bước → chặn thắng 1 bước / dừng sớm khi bị dọa đôi → tạo Bốn hở hai đầu / nước đôi 4-4 → chặn đối thủ tạo Bốn hở hai đầu; và `RootParallelMCTSAgent` trong `src/agents/mcts_parallel.py` song song hóa theo gốc với $K \in \{1, 2, 4\}$ worker):
 
 ~~~sh
 python -m experiments.run configs/p43a_b4_9x9.yaml --workers 4 --out experiments/results/p43a_b4_9x9.csv
+python -m experiments.run configs/p43a_b4_rootpar_9x9.yaml --workers 1 --out experiments/results/p43a_b4_rootpar_9x9.csv
 python -m experiments.p43a_b4
 ~~~
 
-Kết quả ván đấu nằm tại `experiments/results/p43a_b4_9x9.csv`; bảng tổng hợp điểm trước/sau (kèm khoảng tin cậy Wilson 95%, bootstrap 95% và kiểm định $z$) nằm tại `experiments/results/p43a_b4_summary.csv`; bảng tốc độ mô phỏng (`rollout_sims_per_s`, `mcts_sims_per_s`) và tỷ lệ giải bẫy Ba hở hai đầu trước/sau trên bàn 9×9 và 15×15 nằm tại `experiments/results/p43a_b4_speed.csv`.
+Kết quả từng ván đấu sinh từ `experiments/run.py` nằm tại `experiments/results/p43a_b4_9x9.csv` (2.400 ván) và `experiments/results/p43a_b4_rootpar_9x9.csv` (800 ván); bảng tổng hợp điểm trước/sau (kèm khoảng tin cậy Wilson 95%, bootstrap 95% và kiểm định $z$) nằm tại `experiments/results/p43a_b4_summary.csv`; bảng tốc độ mô phỏng (`rollout_sims_per_s`, `mcts_sims_per_s`) và tỷ lệ giải bẫy Ba hở hai đầu trước/sau trên bàn 9×9 và 15×15 nằm tại `experiments/results/p43a_b4_speed.csv` (lưu ý: ở chế độ `split_total_iter`, mỗi cây con chỉ có kích thước $1/K$ nên chi phí duyệt cây nông hơn, giúp hệ số tăng tốc `mcts_speed_ratio` trên bàn 15×15 có thể vượt nhẹ $K$).
 
 ## Đóng góp
 
 | Thành viên | Mã việc |
 | --- | --- |
 | TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a, P3.1b |
-| TV2 | P1.2, P2.2a, P2.2b, P3.2a, P3.2b, P6.2 |
+| TV2 | P1.2, P2.2a, P2.2b, P3.2a, P3.2b, P4.2a, P6.2 |
 | TV3 | P1.3a, P1.3b, P2.3a, P2.3b, P4.3a, P5.3a |

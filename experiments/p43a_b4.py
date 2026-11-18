@@ -7,18 +7,33 @@ Tiêu chí nghiệm thu P4.3a:
       1. **Nước bắt buộc mở rộng (Extended Forced Moves)**: `l2` -> `l2_b4`, `l3` -> `l3_b4`,
          `l4` -> `l4_b4` (ưu tiên 4 tầng: thắng 1 bước -> chặn thắng 1 bước / dừng sớm khi bị
          dọa đôi -> tạo Bốn hở hai đầu / nước đôi 4-4 dừng sớm -> chặn đối thủ tạo Bốn hở hai đầu).
-      2. **Song song hóa theo gốc (Root Parallelization)**: `RootParallelMCTSAgent` với
-         $K = 1$ (trước) so với $K \in \{2, 4\}$ (sau) cây MCTS độc lập chạy song song từ gốc
-         rồi gộp thống kê $(N, W)$ tại các nút con của gốc.
+      2. **Song song hóa theo gốc (Root Parallelization)**: `RootParallelMCTSAgent`
+         (`mcts_parallel`) với $K = 1$ (trước) so với $K \in \{2, 4\}$ (sau) cây MCTS độc lập
+         chạy song song từ gốc rồi gộp thống kê $(N, W)$ tại các nút con của gốc.
+
+Đầu vào (sinh trực tiếp từ `experiments/run.py`):
+  - `experiments/results/p43a_b4_9x9.csv`: 12 cặp đấu × 200 ván = 2.400 ván đánh giá `l2_b4`,
+    `l3_b4`, `l4_b4`.
+  - `experiments/results/p43a_b4_rootpar_9x9.csv`: 4 cặp đấu × 200 ván = 800 ván đánh giá
+    `mcts_parallel` ($K = 2, 4$ đấu với $K = 1$ ở cùng thời gian thực và cùng số vòng lặp/worker).
 
 Đầu ra:
   - `experiments/results/p43a_b4_summary.csv`: Bảng tổng hợp điểm số / tỷ lệ thắng Trước vs Sau
-    (kèm khoảng tin cậy Wilson 95%, bootstrap 95%, kiểm định $z$ và tốc độ mở nút trong ván).
-  - `experiments/results/p43a_b4_speed.csv`: Bảng đo tốc độ mô phỏng (`rollout_sims_per_s`,
+    cho cả 13 phép so sánh (kèm khoảng tin cậy Wilson 95%, bootstrap 95%, kiểm định $z$ và tốc độ
+    mở nút thực tế trong ván đấu).
+  - `experiments/results/p43a_b4_speed.csv`: Bảng đo tốc độ mô phỏng thực tế (`rollout_sims_per_s`,
     `mcts_sims_per_s`, hệ số tăng tốc `speed_ratio`) và tỷ lệ giải đúng thế cờ chiến thuật
-    `Gomoku9_open_three` Trước vs Sau trên bàn 9×9 và 15×15.
+    `Gomoku_open_three` Trước vs Sau trên bàn 9×9 và 15×15.
+    Lưu ý kỹ thuật cho báo cáo: ở chế độ `split_total_iter` (chia tổng ngân sách
+    $T_{\mathrm{total}}$ vòng lặp cho $K$ worker), mỗi cây con chỉ có kích thước
+    $T_{\mathrm{total}} / K$ nên độ sâu cây nhỏ hơn và tỷ lệ vòng lặp nằm ở pha mở rộng gốc
+    $O(1)$ cao hơn so với 1 cây đơn kích thước $T_{\mathrm{total}}$ (vốn phải duyệt
+    `select_child_uct` qua nhiều tầng hơn). Nhờ vậy trên bàn 15×15, hệ số tăng tốc
+    `mcts_speed_ratio` của chế độ `split_total_iter` có thể vượt nhẹ $K$.
 
 Cách chạy:
+    python -m experiments.run configs/p43a_b4_9x9.yaml --workers 4
+    python -m experiments.run configs/p43a_b4_rootpar_9x9.yaml --workers 1
     python -m experiments.p43a_b4
 """
 
@@ -26,6 +41,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import math
 import random
 import time
@@ -33,13 +49,16 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from src.agents.base import Agent, Budget
+from src.agents.base import Budget
 from src.agents.mcts import MCTSAgent, resolve_rollout
-from src.agents.rollouts import RootParallelMCTSAgent
-from src.games.base import PLAYER_O, PLAYER_X
+from src.agents.mcts_parallel import (
+    RootParallelMCTSAgent,
+    measure_parallel_rollouts_per_second,
+)
 from src.games.gomoku import Gomoku
 
 DEFAULT_CSV_IN = Path("experiments/results/p43a_b4_9x9.csv")
+DEFAULT_ROOTPAR_CSV_IN = Path("experiments/results/p43a_b4_rootpar_9x9.csv")
 DEFAULT_SUMMARY_OUT = Path("experiments/results/p43a_b4_summary.csv")
 DEFAULT_SPEED_OUT = Path("experiments/results/p43a_b4_speed.csv")
 
@@ -184,6 +203,23 @@ def _extract_rollout_tag(agent_label: str) -> str:
     return agent_label
 
 
+def _extract_num_workers(row: Mapping[str, Any], side: str) -> int:
+    """Trích xuất `num_workers` từ cột `a_params`/`b_params` hoặc nhãn `agent_a`/`agent_b`."""
+    params_key = f"{side}_params"
+    if params_key in row and row[params_key]:
+        try:
+            parsed = json.loads(str(row[params_key]))
+            if "num_workers" in parsed:
+                return int(parsed["num_workers"])
+        except (ValueError, TypeError):
+            pass
+    label = str(row.get(f"agent_{side}", ""))
+    for k in (8, 4, 2, 1):
+        if f"num_workers={k}" in label:
+            return k
+    return 1
+
+
 def _compute_side_speed(rows: Sequence[Mapping[str, Any]], prefix: str) -> tuple[float, float]:
     """Trả về `(new_nodes_per_s, ms_per_move)` của bên `prefix` (`'a'` hoặc `'b'`)."""
     total_moves = sum(int(r[f"{prefix}_moves"]) for r in rows)
@@ -195,100 +231,91 @@ def _compute_side_speed(rows: Sequence[Mapping[str, Any]], prefix: str) -> tuple
     return nodes_per_s, ms_per_move
 
 
-def _play_head_to_head_agents(
-    agent_after: Agent,
-    budget_after: Budget,
-    agent_before: Agent,
-    budget_before: Budget,
+def _summarize_direct_matchup_rows(
+    rows: Sequence[Mapping[str, Any]],
     *,
-    games: int = 40,
-    size: int = 9,
-    opening_plies: int = 2,
+    category: str,
+    comparison: str,
+    agent_after: str,
+    agent_before: str,
+    budget: str,
     seed: int = 2026,
 ) -> dict[str, Any]:
-    """Chạy `games` ván đối đầu trực tiếp (đổi bên đi trước, khai cuộc ngẫu nhiên 2 ply)."""
-    wins_after = 0
-    draws = 0
-    losses_after = 0
-    scores_after: list[float] = []
-    iters_after = 0
-    time_after = 0.0
-    moves_after = 0
-    iters_before = 0
-    time_before = 0.0
-    moves_before = 0
-
-    for g_idx in range(games):
-        pair_idx = g_idx // 2
-        after_is_x = (g_idx % 2) == 0
-        open_rng = random.Random(seed + 10007 * pair_idx)
-        state = Gomoku(size=size, win_length=5, block_two_ends=False)
-        for _ in range(opening_plies):
-            if state.is_terminal():
-                break
-            state.play(open_rng.choice(state.legal_moves()))
-
-        while not state.is_terminal():
-            cur = state.current_player()
-            is_after_turn = (cur == PLAYER_X and after_is_x) or (cur == PLAYER_O and not after_is_x)
-            if is_after_turn:
-                mv = agent_after.select_move(state, budget_after)
-                st = agent_after.last_stats
-                iters_after += int(st.get("iterations", max(0, int(st.get("nodes", 1)) - 1)))
-                time_after += float(st.get("time_s", 0.0))
-                moves_after += 1
-            else:
-                mv = agent_before.select_move(state, budget_before)
-                st = agent_before.last_stats
-                iters_before += int(st.get("iterations", max(0, int(st.get("nodes", 1)) - 1)))
-                time_before += float(st.get("time_s", 0.0))
-                moves_before += 1
-            state.play(mv)
-
-        winner = state.winner()
-        after_sign = PLAYER_X if after_is_x else PLAYER_O
-        if winner == 0 or winner is None:
-            draws += 1
-            scores_after.append(0.5)
-        elif winner == after_sign:
-            wins_after += 1
-            scores_after.append(1.0)
-        else:
-            losses_after += 1
-            scores_after.append(0.0)
-
-    sims_s_after = (iters_after / time_after) if time_after > 0.0 else 0.0
-    sims_s_before = (iters_before / time_before) if time_before > 0.0 else 0.0
-    ms_after = (time_after * 1000.0 / moves_after) if moves_after > 0 else 0.0
-    ms_before = (time_before * 1000.0 / moves_before) if moves_before > 0 else 0.0
+    """Tổng hợp thống kê cho một cặp đấu đối đầu trực tiếp (A = sau B4, B = trước B4)."""
+    n = len(rows)
+    wins_a = sum(1 for r in rows if float(r["score_a"]) == 1.0)
+    draws = sum(1 for r in rows if float(r["score_a"]) == 0.5)
+    losses_a = n - wins_a - draws
+    scores_a = [float(r["score_a"]) for r in rows]
+    mean_after = sum(scores_a) / n
+    mean_before = 1.0 - mean_after
+    w_lo, w_hi = wilson_ci_95(wins_a, n)
+    b_lo, b_hi = bootstrap_mean_ci(scores_a, seed=seed)
+    z_val, p_val = one_sample_score_z_test(scores_a, mu0=0.5)
+    nps_after, ms_after = _compute_side_speed(rows, "a")
+    nps_before, ms_before = _compute_side_speed(rows, "b")
+    ratio = (nps_after / nps_before) if nps_before > 0.0 else 0.0
     return {
-        "games": games,
-        "wins_after": wins_after,
+        "category": category,
+        "comparison": comparison,
+        "agent_after": agent_after,
+        "agent_before": agent_before,
+        "budget": budget,
+        "games": n,
+        "wins_after": wins_a,
         "draws": draws,
-        "losses_after": losses_after,
-        "scores_after": scores_after,
-        "sims_s_after": sims_s_after,
-        "sims_s_before": sims_s_before,
-        "ms_after": ms_after,
-        "ms_before": ms_before,
+        "losses_after": losses_a,
+        "win_rate_after": round(wins_a / n, 4),
+        "wilson_ci_low": round(w_lo, 4),
+        "wilson_ci_high": round(w_hi, 4),
+        "score_after": round(mean_after, 4),
+        "score_before": round(mean_before, 4),
+        "score_diff": round(mean_after - mean_before, 4),
+        "boot_ci_low": round(b_lo, 4),
+        "boot_ci_high": round(b_hi, 4),
+        "z_stat": round(z_val, 4),
+        "p_value": round(p_val, 6),
+        "significant_005": p_val < 0.05,
+        "new_nodes_per_s_after": round(nps_after, 1),
+        "new_nodes_per_s_before": round(nps_before, 1),
+        "speed_ratio": round(ratio, 4),
+        "ms_per_move_after": round(ms_after, 2),
+        "ms_per_move_before": round(ms_before, 2),
     }
 
 
 def build_summary_rows(
     csv_rows: Sequence[Mapping[str, Any]],
     *,
-    root_parallel_games: int = 40,
+    rootpar_csv_rows: Sequence[Mapping[str, Any]] | None = None,
     seed: int = 2026,
 ) -> list[dict[str, Any]]:
-    """Tạo bảng tổng hợp `p43a_b4_summary.csv` từ CSV ván đấu và các cặp đấu Root Parallel."""
+    """Tạo bảng tổng hợp `p43a_b4_summary.csv` từ CSV ván đấu của `experiments/run.py`."""
     grouped: dict[tuple[str, str, str], list[Mapping[str, Any]]] = {}
+    rootpar_grouped: dict[tuple[int, int, str], list[Mapping[str, Any]]] = {}
+
     for row in csv_rows:
-        tag_a = _extract_rollout_tag(str(row["agent_a"]))
+        label_a = str(row["agent_a"])
+        if "mcts_parallel" in label_a or "num_workers=" in label_a:
+            k_a = _extract_num_workers(row, "a")
+            k_b = _extract_num_workers(row, "b")
+            b_tag = "time_s=0.04" if "time_s=" in label_a else "iterations=120/worker"
+            rootpar_grouped.setdefault((k_a, k_b, b_tag), []).append(row)
+            continue
+        tag_a = _extract_rollout_tag(label_a)
         tag_b = _extract_rollout_tag(str(row["agent_b"]))
-        has_time = "time_s=" in str(row["agent_a"])
+        has_time = "time_s=" in label_a
         budget_tag = "time_s=0.08" if has_time else "iterations=200"
         key = (tag_a, tag_b, budget_tag)
         grouped.setdefault(key, []).append(row)
+
+    if rootpar_csv_rows is not None:
+        for row in rootpar_csv_rows:
+            label_a = str(row["agent_a"])
+            k_a = _extract_num_workers(row, "a")
+            k_b = _extract_num_workers(row, "b")
+            b_tag = "time_s=0.04" if "time_s=" in label_a else "iterations=120/worker"
+            rootpar_grouped.setdefault((k_a, k_b, b_tag), []).append(row)
 
     summary_rows: list[dict[str, Any]] = []
 
@@ -303,48 +330,16 @@ def build_summary_rows(
             rows = grouped.get(key, [])
             if not rows:
                 continue
-            n = len(rows)
-            wins_a = sum(1 for r in rows if float(r["score_a"]) == 1.0)
-            draws = sum(1 for r in rows if float(r["score_a"]) == 0.5)
-            losses_a = n - wins_a - draws
-            scores_a = [float(r["score_a"]) for r in rows]
-            mean_after = sum(scores_a) / n
-            mean_before = 1.0 - mean_after
-            w_lo, w_hi = wilson_ci_95(wins_a, n)
-            b_lo, b_hi = bootstrap_mean_ci(scores_a, seed=seed)
-            z_val, p_val = one_sample_score_z_test(scores_a, mu0=0.5)
-            nps_after, ms_after = _compute_side_speed(rows, "a")
-            nps_before, ms_before = _compute_side_speed(rows, "b")
-            ratio = (nps_after / nps_before) if nps_before > 0.0 else 0.0
-
             summary_rows.append(
-                {
-                    "category": cat_name,
-                    "comparison": f"{after_tag}_vs_{base_tag}",
-                    "agent_after": after_tag,
-                    "agent_before": base_tag,
-                    "budget": budget_tag,
-                    "games": n,
-                    "wins_after": wins_a,
-                    "draws": draws,
-                    "losses_after": losses_a,
-                    "win_rate_after": round(wins_a / n, 4),
-                    "wilson_ci_low": round(w_lo, 4),
-                    "wilson_ci_high": round(w_hi, 4),
-                    "score_after": round(mean_after, 4),
-                    "score_before": round(mean_before, 4),
-                    "score_diff": round(mean_after - mean_before, 4),
-                    "boot_ci_low": round(b_lo, 4),
-                    "boot_ci_high": round(b_hi, 4),
-                    "z_stat": round(z_val, 4),
-                    "p_value": round(p_val, 6),
-                    "significant_005": p_val < 0.05,
-                    "new_nodes_per_s_after": round(nps_after, 1),
-                    "new_nodes_per_s_before": round(nps_before, 1),
-                    "speed_ratio": round(ratio, 4),
-                    "ms_per_move_after": round(ms_after, 2),
-                    "ms_per_move_before": round(ms_before, 2),
-                }
+                _summarize_direct_matchup_rows(
+                    rows,
+                    category=cat_name,
+                    comparison=f"{after_tag}_vs_{base_tag}",
+                    agent_after=after_tag,
+                    agent_before=base_tag,
+                    budget=budget_tag,
+                    seed=seed,
+                )
             )
 
     # 3. Đấu với mốc cơ sở L0 (so sánh điểm đạt được trước vs sau khi thêm nước bắt buộc mở rộng)
@@ -399,143 +394,33 @@ def build_summary_rows(
             }
         )
 
-    # 4. Song song hóa theo gốc (RootParallelMCTSAgent): K=2, 4 (sau) đấu K=1 (trước)
-    if root_parallel_games > 0:
-        for workers_k in (2, 4):
-            # 4a. Cùng ngân sách thời gian thực (time_s = 0.04 s/nước, mỗi worker chạy hết 0.04 s)
-            ag_after_t = RootParallelMCTSAgent(
-                num_workers=workers_k,
-                rollout="l2_b4",
-                c=1.0,
-                use_candidates=True,
-                candidate_radius=2,
-                split_iterations=False,
-                executor="process",
-                seed=seed + 100 * workers_k,
-            )
-            ag_before_t = RootParallelMCTSAgent(
-                num_workers=1,
-                rollout="l2_b4",
-                c=1.0,
-                use_candidates=True,
-                candidate_radius=2,
-                split_iterations=False,
-                executor="process",
-                seed=seed + 100 * workers_k + 1,
-            )
-            res_t = _play_head_to_head_agents(
-                ag_after_t,
-                Budget(time_s=0.04),
-                ag_before_t,
-                Budget(time_s=0.04),
-                games=root_parallel_games,
-                seed=seed + 500 * workers_k,
-            )
-            n_t = int(res_t["games"])
-            scores_t = list(res_t["scores_after"])
-            mean_after_t = sum(scores_t) / n_t
-            mean_before_t = 1.0 - mean_after_t
-            w_lo_t, w_hi_t = wilson_ci_95(int(res_t["wins_after"]), n_t)
-            b_lo_t, b_hi_t = bootstrap_mean_ci(scores_t, seed=seed)
-            z_t, p_t = one_sample_score_z_test(scores_t, mu0=0.5)
-            s_after_t = float(res_t["sims_s_after"])
-            s_before_t = float(res_t["sims_s_before"])
+    # 4. Song song hóa theo gốc (RootParallelMCTSAgent) từ dữ liệu CSV của experiments/run.py
+    for workers_k in (2, 4):
+        rows_time = rootpar_grouped.get((workers_k, 1, "time_s=0.04"), [])
+        if rows_time:
             summary_rows.append(
-                {
-                    "category": "root_parallel_eq_time",
-                    "comparison": f"rootpar_k{workers_k}_vs_k1_time004",
-                    "agent_after": f"rootpar_k{workers_k}_l2_b4",
-                    "agent_before": "rootpar_k1_l2_b4",
-                    "budget": "time_s=0.04",
-                    "games": n_t,
-                    "wins_after": int(res_t["wins_after"]),
-                    "draws": int(res_t["draws"]),
-                    "losses_after": int(res_t["losses_after"]),
-                    "win_rate_after": round(int(res_t["wins_after"]) / n_t, 4),
-                    "wilson_ci_low": round(w_lo_t, 4),
-                    "wilson_ci_high": round(w_hi_t, 4),
-                    "score_after": round(mean_after_t, 4),
-                    "score_before": round(mean_before_t, 4),
-                    "score_diff": round(mean_after_t - mean_before_t, 4),
-                    "boot_ci_low": round(b_lo_t, 4),
-                    "boot_ci_high": round(b_hi_t, 4),
-                    "z_stat": round(z_t, 4),
-                    "p_value": round(p_t, 6),
-                    "significant_005": p_t < 0.05,
-                    "new_nodes_per_s_after": round(s_after_t, 1),
-                    "new_nodes_per_s_before": round(s_before_t, 1),
-                    "speed_ratio": round(s_after_t / s_before_t, 4) if s_before_t > 0 else 0.0,
-                    "ms_per_move_after": round(float(res_t["ms_after"]), 2),
-                    "ms_per_move_before": round(float(res_t["ms_before"]), 2),
-                }
+                _summarize_direct_matchup_rows(
+                    rows_time,
+                    category="root_parallel_eq_time",
+                    comparison=f"rootpar_k{workers_k}_vs_k1_time004",
+                    agent_after=f"rootpar_k{workers_k}_l2_b4",
+                    agent_before="rootpar_k1_l2_b4",
+                    budget="time_s=0.04",
+                    seed=seed,
+                )
             )
-
-            # 4b. Cùng số lượt mô phỏng/worker (120 iter/worker vs K=1 chạy 120 iter)
-            ag_after_i = RootParallelMCTSAgent(
-                num_workers=workers_k,
-                rollout="l2_b4",
-                c=1.0,
-                use_candidates=True,
-                candidate_radius=2,
-                split_iterations=False,
-                executor="process",
-                seed=seed + 200 * workers_k,
-            )
-            ag_before_i = RootParallelMCTSAgent(
-                num_workers=1,
-                rollout="l2_b4",
-                c=1.0,
-                use_candidates=True,
-                candidate_radius=2,
-                split_iterations=False,
-                executor="process",
-                seed=seed + 200 * workers_k + 1,
-            )
-            res_i = _play_head_to_head_agents(
-                ag_after_i,
-                Budget(iterations=120),
-                ag_before_i,
-                Budget(iterations=120),
-                games=root_parallel_games,
-                seed=seed + 700 * workers_k,
-            )
-            n_i = int(res_i["games"])
-            scores_i = list(res_i["scores_after"])
-            mean_after_i = sum(scores_i) / n_i
-            mean_before_i = 1.0 - mean_after_i
-            w_lo_i, w_hi_i = wilson_ci_95(int(res_i["wins_after"]), n_i)
-            b_lo_i, b_hi_i = bootstrap_mean_ci(scores_i, seed=seed)
-            z_i, p_i = one_sample_score_z_test(scores_i, mu0=0.5)
-            s_after_i = float(res_i["sims_s_after"])
-            s_before_i = float(res_i["sims_s_before"])
+        rows_iter = rootpar_grouped.get((workers_k, 1, "iterations=120/worker"), [])
+        if rows_iter:
             summary_rows.append(
-                {
-                    "category": "root_parallel_per_worker_iter",
-                    "comparison": f"rootpar_k{workers_k}_vs_k1_iter120",
-                    "agent_after": f"rootpar_k{workers_k}_l2_b4",
-                    "agent_before": "rootpar_k1_l2_b4",
-                    "budget": "iterations=120/worker",
-                    "games": n_i,
-                    "wins_after": int(res_i["wins_after"]),
-                    "draws": int(res_i["draws"]),
-                    "losses_after": int(res_i["losses_after"]),
-                    "win_rate_after": round(int(res_i["wins_after"]) / n_i, 4),
-                    "wilson_ci_low": round(w_lo_i, 4),
-                    "wilson_ci_high": round(w_hi_i, 4),
-                    "score_after": round(mean_after_i, 4),
-                    "score_before": round(mean_before_i, 4),
-                    "score_diff": round(mean_after_i - mean_before_i, 4),
-                    "boot_ci_low": round(b_lo_i, 4),
-                    "boot_ci_high": round(b_hi_i, 4),
-                    "z_stat": round(z_i, 4),
-                    "p_value": round(p_i, 6),
-                    "significant_005": p_i < 0.05,
-                    "new_nodes_per_s_after": round(s_after_i, 1),
-                    "new_nodes_per_s_before": round(s_before_i, 1),
-                    "speed_ratio": round(s_after_i / s_before_i, 4) if s_before_i > 0 else 0.0,
-                    "ms_per_move_after": round(float(res_i["ms_after"]), 2),
-                    "ms_per_move_before": round(float(res_i["ms_before"]), 2),
-                }
+                _summarize_direct_matchup_rows(
+                    rows_iter,
+                    category="root_parallel_per_worker_iter",
+                    comparison=f"rootpar_k{workers_k}_vs_k1_iter120",
+                    agent_after=f"rootpar_k{workers_k}_l2_b4",
+                    agent_before="rootpar_k1_l2_b4",
+                    budget="iterations=120/worker",
+                    seed=seed,
+                )
             )
 
     return summary_rows
@@ -647,13 +532,41 @@ def _bench_trap_solve_rate(
     return solved / trials if trials > 0 else 0.0
 
 
+def _bench_rootpar_trap_solve_rate(
+    trap_state: Gomoku,
+    optimal_moves: set[tuple[int, int]],
+    *,
+    num_workers: int,
+    split_iterations: bool,
+    iterations: int,
+    trials: int,
+    seed: int,
+) -> float:
+    """Đo tỷ lệ giải đúng thế bẫy của `RootParallelMCTSAgent` ở tổng ngân sách `iterations`."""
+    solved = 0
+    for t in range(trials):
+        ag = RootParallelMCTSAgent(
+            num_workers=num_workers,
+            rollout="l2_b4",
+            c=1.0,
+            use_candidates=True,
+            candidate_radius=2,
+            split_iterations=split_iterations,
+            executor="process",
+            seed=seed + 3000 + t,
+        )
+        if ag.select_move(trap_state, Budget(iterations=iterations)) in optimal_moves:
+            solved += 1
+    return solved / trials if trials > 0 else 0.0
+
+
 def build_speed_rows(
     *,
     num_rollouts: int = 500,
     mcts_trials: int = 8,
     mcts_iterations: int = 200,
     trap_trials: int = 40,
-    trap_iterations: int = 60,
+    trap_iterations: int = 80,
     seed: int = 2026,
 ) -> list[dict[str, Any]]:
     """Tạo bảng đo tốc độ mô phỏng (`sims_per_s`) và tỷ lệ giải bẫy Trước vs Sau."""
@@ -723,9 +636,15 @@ def build_speed_rows(
     for size in (9, 15):
         mid_state = _make_midgame_state(size)
         trap_state, opt_moves = _make_open_three_trap(size)
-        r_l2b4 = _bench_rollout_speed(mid_state, "l2_b4", num_rollouts, seed)
+        r_before_k1 = measure_parallel_rollouts_per_second(
+            mid_state,
+            "l2_b4",
+            num_workers=1,
+            num_rollouts_per_worker=num_rollouts,
+            seed=seed,
+        )
 
-        # Đo mốc K=1 (Before)
+        # Đo tốc độ MCTS của mốc K=1 (Before) ở ngân sách mcts_iterations
         ag_k1 = RootParallelMCTSAgent(
             num_workers=1,
             rollout="l2_b4",
@@ -736,7 +655,6 @@ def build_speed_rows(
             executor="process",
             seed=seed,
         )
-        # Warm-up và đo K=1
         t0_k1 = time.perf_counter()
         iters_k1 = 0
         for _ in range(mcts_trials):
@@ -746,27 +664,44 @@ def build_speed_rows(
         m_before_k1 = (iters_k1 / dt_k1) if dt_k1 > 0.0 else 0.0
         ms_before_k1 = (dt_k1 * 1000.0 / mcts_trials) if mcts_trials > 0 else 0.0
 
-        solved_k1 = 0
-        for t in range(trap_trials):
-            ag_t1 = RootParallelMCTSAgent(
-                num_workers=1,
-                rollout="l2_b4",
-                c=1.0,
-                use_candidates=True,
-                candidate_radius=2,
-                split_iterations=False,
-                executor="process",
-                seed=seed + 3000 + t,
-            )
-            if ag_t1.select_move(trap_state, Budget(iterations=trap_iterations)) in opt_moves:
-                solved_k1 += 1
-        solve_rate_k1 = solved_k1 / trap_trials if trap_trials > 0 else 0.0
+        # Tỷ lệ giải bẫy của mốc K=1 ở tổng ngân sách `mcts_iterations` (dùng cho split_total_iter)
+        solve_k1_split_total = _bench_rootpar_trap_solve_rate(
+            trap_state,
+            opt_moves,
+            num_workers=1,
+            split_iterations=False,
+            iterations=mcts_iterations,
+            trials=trap_trials,
+            seed=seed,
+        )
 
         for workers_k in (2, 4):
+            # Ở chế độ unsplit, mỗi worker chạy `trap_iterations` vòng (tổng K * trap_iterations);
+            # mốc K=1 đối chiếu cũng chạy đúng `K * trap_iterations` vòng để cùng tổng ngân sách.
+            solve_k1_unsplit_total = _bench_rootpar_trap_solve_rate(
+                trap_state,
+                opt_moves,
+                num_workers=1,
+                split_iterations=False,
+                iterations=trap_iterations * workers_k,
+                trials=trap_trials,
+                seed=seed,
+            )
+
             for split_flag, mode_label in (
                 (False, "unsplit_iter_per_worker"),
                 (True, "split_total_iter"),
             ):
+                # Đo thực tế thông lượng rollout song song qua ProcessPoolExecutor
+                r_after_k = measure_parallel_rollouts_per_second(
+                    mid_state,
+                    "l2_b4",
+                    num_workers=workers_k,
+                    num_rollouts_per_worker=num_rollouts,
+                    split_total=split_flag,
+                    seed=seed,
+                )
+
                 ag_k = RootParallelMCTSAgent(
                     num_workers=workers_k,
                     rollout="l2_b4",
@@ -789,25 +724,30 @@ def build_speed_rows(
                 m_after_k = (iters_k / dt_k) if dt_k > 0.0 else 0.0
                 ms_after_k = (dt_k * 1000.0 / mcts_trials) if mcts_trials > 0 else 0.0
 
-                solved_k = 0
-                eff_trap_iters = trap_iterations * workers_k if split_flag else trap_iterations
-                for t in range(trap_trials):
-                    ag_tk = RootParallelMCTSAgent(
+                if not split_flag:
+                    # Cùng tổng ngân sách `K * trap_iterations` giữa K=1 và K worker
+                    s_before = solve_k1_unsplit_total
+                    s_after = _bench_rootpar_trap_solve_rate(
+                        trap_state,
+                        opt_moves,
                         num_workers=workers_k,
-                        rollout="l2_b4",
-                        c=1.0,
-                        use_candidates=True,
-                        candidate_radius=2,
-                        split_iterations=split_flag,
-                        executor="process",
-                        seed=seed + 3000 + t,
+                        split_iterations=False,
+                        iterations=trap_iterations,
+                        trials=trap_trials,
+                        seed=seed,
                     )
-                    if (
-                        ag_tk.select_move(trap_state, Budget(iterations=eff_trap_iters))
-                        in opt_moves
-                    ):
-                        solved_k += 1
-                solve_rate_k = solved_k / trap_trials if trap_trials > 0 else 0.0
+                else:
+                    # Cùng tổng ngân sách `mcts_iterations` giữa K=1 và K worker (mỗi worker chia K)
+                    s_before = solve_k1_split_total
+                    s_after = _bench_rootpar_trap_solve_rate(
+                        trap_state,
+                        opt_moves,
+                        num_workers=workers_k,
+                        split_iterations=True,
+                        iterations=mcts_iterations,
+                        trials=trap_trials,
+                        seed=seed,
+                    )
 
                 rows.append(
                     {
@@ -817,9 +757,11 @@ def build_speed_rows(
                         "variant_after": f"rootpar_k{workers_k}_l2_b4",
                         "workers": workers_k,
                         "mode": mode_label,
-                        "rollout_sims_per_s_before": round(r_l2b4, 1),
-                        "rollout_sims_per_s_after": round(r_l2b4 * workers_k, 1),
-                        "rollout_speed_ratio": round(float(workers_k), 4),
+                        "rollout_sims_per_s_before": round(r_before_k1, 1),
+                        "rollout_sims_per_s_after": round(r_after_k, 1),
+                        "rollout_speed_ratio": (
+                            round(r_after_k / r_before_k1, 4) if r_before_k1 > 0 else 0.0
+                        ),
                         "mcts_sims_per_s_before": round(m_before_k1, 1),
                         "mcts_sims_per_s_after": round(m_after_k, 1),
                         "mcts_speed_ratio": (
@@ -827,9 +769,9 @@ def build_speed_rows(
                         ),
                         "ms_per_move_before": round(ms_before_k1, 2),
                         "ms_per_move_after": round(ms_after_k, 2),
-                        "open_three_solve_before": round(solve_rate_k1, 4),
-                        "open_three_solve_after": round(solve_rate_k, 4),
-                        "open_three_solve_diff": round(solve_rate_k - solve_rate_k1, 4),
+                        "open_three_solve_before": round(s_before, 4),
+                        "open_three_solve_after": round(s_after, 4),
+                        "open_three_solve_diff": round(s_after - s_before, 4),
                     }
                 )
 
@@ -853,7 +795,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--csv-in",
         type=Path,
         default=DEFAULT_CSV_IN,
-        help="Đường dẫn CSV ván đấu đầu vào (mặc định: experiments/results/p43a_b4_9x9.csv).",
+        help="Đường dẫn CSV ván đấu B4 đầu vào (mặc định: experiments/results/p43a_b4_9x9.csv).",
+    )
+    parser.add_argument(
+        "--rootpar-csv-in",
+        type=Path,
+        default=DEFAULT_ROOTPAR_CSV_IN,
+        help="Đường dẫn CSV ván đấu Root Parallel (experiments/results/p43a_b4_rootpar_9x9.csv).",
     )
     parser.add_argument(
         "--summary-out",
@@ -867,19 +815,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=DEFAULT_SPEED_OUT,
         help="Đường dẫn CSV tốc độ sims/s trước/sau (experiments/results/p43a_b4_speed.csv).",
     )
-    parser.add_argument(
-        "--root-parallel-games",
-        type=int,
-        default=40,
-        help="Số ván đối đầu trực tiếp cho mỗi cặp RootParallelMCTSAgent (mặc định: 40).",
-    )
     args = parser.parse_args(argv)
 
     csv_rows = load_csv_rows(args.csv_in)
-    summary_rows = build_summary_rows(
-        csv_rows,
-        root_parallel_games=args.root_parallel_games,
-    )
+    rootpar_rows = load_csv_rows(args.rootpar_csv_in) if args.rootpar_csv_in.exists() else []
+    summary_rows = build_summary_rows(csv_rows, rootpar_csv_rows=rootpar_rows)
     write_csv(args.summary_out, SUMMARY_FIELDS, summary_rows)
 
     speed_rows = build_speed_rows()

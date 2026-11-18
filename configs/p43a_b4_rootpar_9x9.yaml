@@ -1,0 +1,78 @@
+# P4.3a — Bonus B4 (Phần 2): Song song hóa theo gốc (Root Parallelization)
+# Chủ sở hữu: TV3. Review: TV1.
+#
+# Lưu ý về workers = 1 ở cấp runner:
+#   Bản thân mỗi agent `mcts_parallel` đã khởi chạy `num_workers` (K = 2, 4) tiến trình con
+#   song song tại mỗi nước đi qua `ProcessPoolExecutor`. Đặt `workers: 1` ở cấp ván đấu giúp
+#   tránh tranh chấp nhân CPU giữa các ván khi đo hiệu năng song song hóa theo gốc.
+#
+# Các cặp đấu trên bàn Caro 9×9 (200 ván/cặp, đổi bên đi trước, khai cuộc ngẫu nhiên 2 ply):
+#   1. Cùng ngân sách thời gian thực (time_s = 0.04 s/nước, split_iterations = false):
+#        - K = 2 vs K = 1
+#        - K = 4 vs K = 1
+#   2. Cùng ngân sách vòng lặp trên mỗi worker (iterations = 120/worker, split_iterations = false):
+#        - K = 2 vs K = 1
+#        - K = 4 vs K = 1
+
+name: p43a_b4_rootpar_9x9
+seed: 2026
+games: 200
+swap_first: true
+opening_plies: 2
+workers: 1
+
+game:
+  type: gomoku
+  size: 9
+  win_length: 5
+  block_two_ends: false
+
+matchups:
+  # 1. Cùng ngân sách thời gian thực (time_s = 0.04 s/nước)
+  - a:
+      type: mcts_parallel
+      num_workers: [2, 4]
+      rollout: l2_b4
+      c: 1.0
+      use_candidates: true
+      candidate_radius: 2
+      split_iterations: false
+      executor: process
+      budget:
+        time_s: 0.04
+    b:
+      type: mcts_parallel
+      num_workers: 1
+      rollout: l2_b4
+      c: 1.0
+      use_candidates: true
+      candidate_radius: 2
+      split_iterations: false
+      executor: process
+      budget:
+        time_s: 0.04
+
+  # 2. Cùng số vòng lặp trên mỗi worker (iterations = 120/worker)
+  - a:
+      type: mcts_parallel
+      num_workers: [2, 4]
+      rollout: l2_b4
+      c: 1.0
+      use_candidates: true
+      candidate_radius: 2
+      split_iterations: false
+      executor: process
+      budget:
+        iterations: 120
+    b:
+      type: mcts_parallel
+      num_workers: 1
+      rollout: l2_b4
+      c: 1.0
+      use_candidates: true
+      candidate_radius: 2
+      split_iterations: false
+      executor: process
+      budget:
+        iterations: 120
+

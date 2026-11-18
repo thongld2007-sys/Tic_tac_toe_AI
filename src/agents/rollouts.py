@@ -40,27 +40,21 @@ Tối ưu tốc độ mô phỏng (`sims_per_s`) trên bàn Caro (`Gomoku`):
 
 from __future__ import annotations
 
-import hashlib
 import inspect
 import math
-import multiprocessing as mp
 import random
 import time
 from bisect import bisect_left
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from functools import cache
-from typing import Any
 
-from src.agents.base import Agent, Budget, RootStat
+from src.agents.base import Budget
 from src.agents.mcts import (
-    DEFAULT_C,
     MCTSAgent,
-    MCTSNode,
     RolloutFn,
     default_rollout,
     register_rollout,
-    select_final_child,
 )
+from src.agents.mcts_parallel import RootParallelMCTSAgent, shutdown_root_process_pools
 from src.eval.patterns import evaluate as evaluate_patterns
 from src.games.base import PLAYER_O, PLAYER_X, Board, GameState, Move
 from src.games.gomoku import Gomoku
@@ -1771,256 +1765,26 @@ register_rollout("l2_b4", rollout_l2_b4)
 register_rollout("l3_b4", rollout_l3_b4)
 register_rollout("l4_b4", rollout_l4_b4)
 
-
-_ROOT_PROCESS_POOLS: dict[int, ProcessPoolExecutor] = {}
-
-
-def _get_root_process_pool(num_workers: int) -> ProcessPoolExecutor:
-    """Lấy (hoặc khởi tạo một lần) `ProcessPoolExecutor` có `num_workers` tiến trình ấm."""
-    pool = _ROOT_PROCESS_POOLS.get(num_workers)
-    if pool is None:
-        pool = ProcessPoolExecutor(max_workers=num_workers)
-        _ROOT_PROCESS_POOLS[num_workers] = pool
-    return pool
-
-
-def _derive_worker_seed(*parts: object) -> int:
-    text = ":".join(str(p) for p in parts)
-    return int.from_bytes(hashlib.sha256(text.encode()).digest()[:8], "big") >> 1
-
-
-def _run_root_worker_task(
-    args: tuple[GameState, dict[str, Any], Budget, int],
-) -> dict[str, Any]:
-    """Chạy 1 cây MCTS độc lập trong tiến trình/luồng con của Root Parallelization (B4)."""
-    state_clone, agent_kwargs, worker_budget, worker_seed = args
-    worker = MCTSAgent(seed=worker_seed, **agent_kwargs)
-    worker.select_move(state_clone, worker_budget)
-    root = worker.last_root
-    assert root is not None
-    child_records = [
-        (ch.move, int(ch.N), float(ch.W))
-        for ch in root.children
-        if ch.move is not None and ch.N > 0
-    ]
-    return {
-        "nodes": int(worker.last_stats.get("nodes", 0)),
-        "depth": int(worker.last_stats.get("depth", 0)),
-        "iterations": int(root.N),
-        "children": child_records,
-    }
-
-
-class RootParallelMCTSAgent(Agent):
-    """Agent MCTS song song hóa theo gốc (Root Parallelization — Bonus B4 / P4.3a).
-
-    Mỗi lần chọn nước, agent chạy `num_workers` cây tìm kiếm MCTS độc lập từ thế cờ gốc
-    với các hạt giống ngẫu nhiên tách biệt, sau đó cộng gộp thống kê `(N, W)` của các nhánh
-    con tại nút gốc và chọn nước đi cuối theo quy tắc `selection` (`robust`, `max`, `max_robust`).
-
-    Tham số:
-      - `num_workers`: số lượng cây MCTS chạy song song (`>= 1`, mặc định `4`).
-      - `split_iterations`: khi `budget.iterations` được truyền vào:
-          * Nếu `False` (mặc định): mỗi worker chạy đủ `budget.iterations` vòng lặp song song
-            (tăng tổng mẫu mô phỏng lên `num_workers` lần trong xấp xỉ cùng thời gian thực).
-          * Nếu `True`: chia tổng `budget.iterations` cho `num_workers` worker (giữ tổng số
-            vòng lặp không đổi nhưng giảm thời gian thực trên mỗi nước đi).
-      - `executor`: `"process"` (mặc định, chạy đa tiến trình thực sự vượt qua GIL; tự động
-        chuyển sang `"thread"` nếu đang ở trong tiến trình con daemon) hoặc `"thread"`.
-    """
-
-    def __init__(
-        self,
-        num_workers: int = 4,
-        c: float = DEFAULT_C,
-        selection: str = "robust",
-        *,
-        rollout: str | RolloutFn = "l2_b4",
-        rollout_depth: int | None = None,
-        use_candidates: bool = True,
-        candidate_radius: int = 2,
-        split_iterations: bool = False,
-        executor: str = "process",
-        seed: int | None = None,
-    ) -> None:
-        super().__init__()
-        if isinstance(num_workers, bool) or not isinstance(num_workers, int) or num_workers < 1:
-            raise ValueError(f"num_workers phải là số nguyên >= 1, nhận được {num_workers!r}")
-        if not isinstance(split_iterations, bool):
-            raise ValueError(f"split_iterations phải là kiểu bool, nhận được {split_iterations!r}")
-        if executor not in ("process", "thread"):
-            raise ValueError(f"executor phải là 'process' hoặc 'thread', nhận được {executor!r}")
-
-        # Kiểm tra hợp lệ các tham số MCTS chuẩn thông qua một MCTSAgent mẫu
-        probe = MCTSAgent(
-            c=c,
-            selection=selection,
-            rollout=rollout,
-            rollout_depth=rollout_depth,
-            use_candidates=use_candidates,
-            candidate_radius=candidate_radius,
-            reuse_tree=False,
-            seed=seed,
-        )
-        self.num_workers = num_workers
-        self.c = probe.c
-        self.selection = probe.selection
-        self.rollout = probe.rollout
-        self.rollout_fn = probe.rollout_fn
-        self.rollout_depth = probe.rollout_depth
-        self.use_candidates = probe.use_candidates
-        self.candidate_radius = probe.candidate_radius
-        self.split_iterations = split_iterations
-        self.executor = executor
-        self.seed = seed
-        self._call_count = 0
-        self.last_root: MCTSNode | None = None
-        self.name = f"mcts-rootpar{num_workers}-{self.rollout}"
-
-    def get_params(self) -> dict[str, Any]:
-        """Trả về từ điển tham số cấu hình của agent song song hóa theo gốc."""
-        return {
-            "num_workers": self.num_workers,
-            "c": self.c,
-            "selection": self.selection,
-            "rollout": self.rollout,
-            "rollout_depth": self.rollout_depth,
-            "use_candidates": self.use_candidates,
-            "candidate_radius": self.candidate_radius,
-            "split_iterations": self.split_iterations,
-            "executor": self.executor,
-            "seed": self.seed,
-        }
-
-    def select_move(self, state: GameState, budget: Budget) -> Move:
-        """Chạy `num_workers` cây MCTS song song tại gốc, gộp `(N, W)` và chọn nước đi tốt nhất."""
-        if state.is_terminal():
-            raise ValueError("Ván đã kết thúc, không còn nước để chọn")
-        max_iterations, max_time_s = MCTSAgent._validate_budget(budget)
-        self._call_count += 1
-        base_seed = 0 if self.seed is None else self.seed
-
-        agent_kwargs: dict[str, Any] = {
-            "c": self.c,
-            "selection": self.selection,
-            "rollout": self.rollout if not callable(self.rollout_fn) else self.rollout,
-            "rollout_depth": self.rollout_depth,
-            "use_candidates": self.use_candidates,
-            "candidate_radius": self.candidate_radius,
-            "reuse_tree": False,
-        }
-
-        if self.num_workers == 1:
-            single_seed = _derive_worker_seed(base_seed, self._call_count, state.hash(), 0)
-            single_agent = MCTSAgent(seed=single_seed, **agent_kwargs)
-            move = single_agent.select_move(state, budget)
-            self.last_root = single_agent.last_root
-            self.last_stats = dict(single_agent.last_stats)
-            self.last_stats["workers"] = 1
-            self.last_stats["iterations"] = (
-                int(self.last_root.N) if self.last_root is not None else 0
-            )
-            return move
-
-        start_t = time.perf_counter()
-        tasks: list[tuple[GameState, dict[str, Any], Budget, int]] = []
-        for w_id in range(self.num_workers):
-            if max_iterations is not None and self.split_iterations:
-                w_iters = max(1, (max_iterations + w_id) // self.num_workers)
-            else:
-                w_iters = max_iterations
-            w_budget = Budget(iterations=w_iters, time_s=max_time_s)
-            w_seed = _derive_worker_seed(base_seed, self._call_count, state.hash(), w_id)
-            tasks.append((state.clone(), agent_kwargs, w_budget, w_seed))
-
-        use_process_pool = self.executor == "process" and not mp.current_process().daemon
-        if use_process_pool:
-            pool = _get_root_process_pool(self.num_workers)
-            results = list(pool.map(_run_root_worker_task, tasks))
-        else:
-            with ThreadPoolExecutor(max_workers=self.num_workers) as tpool:
-                results = list(tpool.map(_run_root_worker_task, tasks))
-
-        agg_n: dict[Move, int] = {}
-        agg_w: dict[Move, float] = {}
-        total_nodes = 0
-        total_iters = 0
-        max_depth = 0
-
-        for res in results:
-            total_nodes += int(res["nodes"])
-            total_iters += int(res["iterations"])
-            if int(res["depth"]) > max_depth:
-                max_depth = int(res["depth"])
-            for mv, n_val, w_val in res["children"]:
-                agg_n[mv] = agg_n.get(mv, 0) + n_val
-                agg_w[mv] = agg_w.get(mv, 0.0) + w_val
-
-        player = state.current_player()
-        merged_root = MCTSNode(
-            move=None,
-            parent=None,
-            player_just_moved=-player,
-            untried_moves=[],
-            depth=0,
-            state_hash=state.hash(),
-        )
-        merged_root.N = total_iters
-
-        for mv, n_val in agg_n.items():
-            ch = MCTSNode(
-                move=mv,
-                parent=merged_root,
-                player_just_moved=player,
-                untried_moves=[],
-                depth=1,
-            )
-            ch.N = n_val
-            ch.W = agg_w[mv]
-            merged_root.children.append(ch)
-
-        if not merged_root.children:
-            fallback_moves = (
-                state.candidate_moves(self.candidate_radius)
-                if self.use_candidates
-                else state.legal_moves()
-            )
-            if not fallback_moves:
-                fallback_moves = state.legal_moves()
-            ch = MCTSNode(
-                move=fallback_moves[0],
-                parent=merged_root,
-                player_just_moved=player,
-                untried_moves=[],
-                depth=1,
-            )
-            ch.N = 1
-            merged_root.children.append(ch)
-
-        best_child = select_final_child(merged_root, selection=self.selection, c=self.c)
-        assert best_child.move is not None
-        elapsed = time.perf_counter() - start_t
-
-        root_stats: list[RootStat] = [
-            {
-                "move": ch.move,
-                "N": ch.N,
-                "W": ch.W,
-                "q": ch.q,
-                "uct": ch.uct_score(self.c),
-            }
-            for ch in sorted(merged_root.children, key=lambda c_node: (-c_node.N, -c_node.q))
-            if ch.move is not None
-        ]
-
-        self.last_root = merged_root
-        self.last_stats = {
-            "nodes": total_nodes,
-            "iterations": total_iters,
-            "time_s": elapsed,
-            "depth": max_depth,
-            "sims_per_s": (total_iters / elapsed) if elapsed > 0.0 else 0.0,
-            "workers": self.num_workers,
-            "root": root_stats,
-        }
-        return best_child.move
+__all__ = [
+    "DEFAULT_CUTOFF_DEPTH",
+    "DEFAULT_TAU",
+    "DEFAULT_TEMPERATURE",
+    "RootParallelMCTSAgent",
+    "evaluate_leaf_tanh",
+    "find_open_four_moves",
+    "find_winning_moves",
+    "measure_sims_per_second",
+    "rollout_l0",
+    "rollout_l1",
+    "rollout_l2",
+    "rollout_l2_b4",
+    "rollout_l3",
+    "rollout_l3_b4",
+    "rollout_l4",
+    "rollout_l4_b4",
+    "score_move_pattern",
+    "select_extended_tactical_move",
+    "select_softmax_move",
+    "select_tactical_move",
+    "shutdown_root_process_pools",
+]

@@ -307,6 +307,15 @@ def test_gomoku_game_can_be_played_to_the_end() -> None:
     assert rows[0]["game"] == "gomoku5-block"
 
 
+def test_xiangqi_game_runs_through_runner() -> None:
+    cfg = config(game={"type": "xiangqi", "max_plies": 30}, games=2, opening_plies=2)
+    rows = run_experiment(cfg, workers=1)
+    assert rows[0]["game"] == "xiangqi"
+    assert all(row["plies"] <= 30 for row in rows)
+    with pytest.raises(ConfigError):
+        build_game({"type": "xiangqi", "size": 9})
+
+
 # ---------------------------------------------------------------------------
 # Cả thực nghiệm
 # ---------------------------------------------------------------------------

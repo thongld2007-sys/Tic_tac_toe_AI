@@ -106,10 +106,26 @@ python -m experiments.run configs/p42a_b2_b3_9x9.yaml --workers 8
 python -m experiments.plots
 ~~~
 
+## Cờ tướng (P4.1b)
+
+`src/games/xiangqi.py` cài luật cờ tướng theo cùng interface `GameState` nên MCTS và runner dùng
+được ngay (`game: {type: xiangqi, max_plies: 300}`). Một nước đi là cặp `(ô đi, ô đến)` với ô
+đánh số `hàng * 9 + cột`; `parse_iccs("h2e2")` và `move_to_iccs` đổi sang ký hiệu ICCS. Bên hết
+nước hợp lệ thì thua; hòa khi 120 nước liền không ăn quân, lặp thế ba lần hoặc chạm `max_plies`.
+
+Kiểm tra bộ sinh nước bằng perft (số nút lá của cây nước hợp lệ). Thế ban đầu cho 44, 1 920,
+79 666 và 3 290 240 nút ở độ sâu 1–4, khớp số tham chiếu:
+
+```bash
+python -m src.games.xiangqi --perft 4
+```
+
+Thêm `--fen "<FEN>"` để đếm từ thế khác và `--divide` để tách số nút theo từng nước đầu.
+
 ## Đóng góp
 
 | Thành viên | Mã việc |
 | --- | --- |
-| TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a, P3.1b, P6.1b, P4.1a |
+| TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a, P3.1b, P6.1b, P4.1a, P4.1b |
 | TV2 | P1.2, P2.2a, P2.2b, P3.2a, P3.2b, P4.2a, P6.2 |
 | TV3 | P1.3a, P1.3b, P2.3a, P2.3b, P5.3a |

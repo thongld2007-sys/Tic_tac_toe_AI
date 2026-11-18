@@ -106,7 +106,7 @@ python -m experiments.run configs/p42a_b2_b3_9x9.yaml --workers 8
 python -m experiments.plots
 ~~~
 
-## Cờ tướng (P4.1b)
+## Cờ tướng (P4.1b, P4.2b)
 
 `src/games/xiangqi.py` cài luật cờ tướng theo cùng interface `GameState` nên MCTS và runner dùng
 được ngay (`game: {type: xiangqi, max_plies: 300}`). Một nước đi là cặp `(ô đi, ô đến)` với ô
@@ -122,10 +122,19 @@ python -m src.games.xiangqi --perft 4
 
 Thêm `--fen "<FEN>"` để đếm từ thế khác và `--divide` để tách số nút theo từng nước đầu.
 
+Hai agent cờ tướng (`src/agents/xiangqi_agents.py`, P4.2b) gồm `AlphaBetaXiangqi` (lượng giá vật
+chất + bảng vị trí PST, MVV-LVA, Quiescence Search, Iterative Deepening và Zobrist TT) và
+`XiangqiMCTSAgent` (MCTS-UCT với Rollout L4 `xiangqi_l4` cắt sớm bằng `tanh(eval / tau)`). Kiểm
+chứng tỷ lệ thắng của cả hai agent trước `RandomAgent`:
+
+```bash
+python -m experiments.run configs/p42b_xiangqi_vs_random.yaml --workers 8
+```
+
 ## Đóng góp
 
 | Thành viên | Mã việc |
 | --- | --- |
 | TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a, P3.1b, P6.1b, P4.1a, P4.1b |
-| TV2 | P1.2, P2.2a, P2.2b, P3.2a, P3.2b, P4.2a, P6.2 |
+| TV2 | P1.2, P2.2a, P2.2b, P3.2a, P3.2b, P4.2a, P4.2b, P6.2 |
 | TV3 | P1.3a, P1.3b, P2.3a, P2.3b, P5.3a |

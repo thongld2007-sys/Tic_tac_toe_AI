@@ -19,4 +19,4 @@ figures:
 	$(PYTHON) -m experiments.plots
 
 demo:
-	$(PYTHON) -m src.ui.gui_core
+	$(PYTHON) -m src.ui.gui_panel

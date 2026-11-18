@@ -202,6 +202,8 @@ ZOBRIST, ZOBRIST_RED_TO_MOVE = _build_zobrist()
 
 def square_name(s: int) -> str:
     """Tên ô theo ICCS: cột a–i, hàng 0–9 tính từ phía Đỏ. Ô 81 (hàng 9, cột 0) là "a0"."""
+    if isinstance(s, bool) or not isinstance(s, int) or not 0 <= s < SQUARES:
+        raise ValueError(f"Ô phải là số nguyên từ 0 đến {SQUARES - 1}, nhận được {s!r}")
     r, c = divmod(s, COLS)
     return f"{chr(ord('a') + c)}{ROWS - 1 - r}"
 
@@ -239,10 +241,11 @@ class Xiangqi(GameState):
         no_capture_limit: int | None = DEFAULT_NO_CAPTURE_LIMIT,
         max_plies: int | None = None,
     ) -> None:
-        if no_capture_limit is not None and no_capture_limit < 1:
-            raise ValueError(f"no_capture_limit phải >= 1, nhận được {no_capture_limit}")
-        if max_plies is not None and max_plies < 1:
-            raise ValueError(f"max_plies phải >= 1, nhận được {max_plies}")
+        for name, value in (("no_capture_limit", no_capture_limit), ("max_plies", max_plies)):
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, int) or value < 1
+            ):
+                raise ValueError(f"{name} phải là số nguyên >= 1 hoặc None, nhận được {value!r}")
         self.no_capture_limit = no_capture_limit
         self.max_plies = max_plies
         self._load_fen(fen)
@@ -290,7 +293,11 @@ class Xiangqi(GameState):
             player = BLACK
         else:
             raise ValueError(f"Lượt đi trong FEN phải là w/r hoặc b, nhận được {turn!r}")
-        no_capture = int(fields[4]) if len(fields) > 4 else 0
+        no_capture = 0
+        if len(fields) > 4:
+            if not fields[4].isdigit():
+                raise ValueError(f"Số nước không ăn quân trong FEN phải >= 0: {fields[4]!r}")
+            no_capture = int(fields[4])
 
         self._sq = sq
         self._king = kings

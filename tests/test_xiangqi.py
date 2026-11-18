@@ -117,6 +117,8 @@ def test_fen_accepts_alternative_letters_and_black_to_move() -> None:
         "4k4/9/9/9/9/9/9/9/9/K8 w",
         "4k4/9/9/9/9/9/9/9/4K4/4K4 w",
         "4k4/9/9/9/9/9/9/9/9/4K4 x",
+        "3k5/9/9/9/9/9/9/9/9/4K4 w - - -5 1",
+        "3k5/9/9/9/9/9/9/9/9/4K4 w - - x 1",
     ],
 )
 def test_invalid_fen_is_rejected(fen: str) -> None:
@@ -129,6 +131,9 @@ def test_iccs_names() -> None:
     assert parse_square("a0") == 9 * COLS
     assert parse_square("i9") == COLS - 1
     assert move_to_iccs(parse_iccs("h2-e2")) == "h2e2"
+    for bad_square in (-1, 90, 999, True, 1.0):
+        with pytest.raises(ValueError):
+            square_name(bad_square)  # type: ignore[arg-type]
     for bad in ("j0", "a", "aa"):
         with pytest.raises(ValueError):
             parse_square(bad)
@@ -299,11 +304,12 @@ def test_max_plies_is_draw() -> None:
     assert state.winner() == DRAW
 
 
-def test_invalid_limits_are_rejected() -> None:
+@pytest.mark.parametrize("value", [0, -3, True, False, 2.5, "10"])
+def test_invalid_limits_are_rejected(value: object) -> None:
     with pytest.raises(ValueError):
-        Xiangqi(no_capture_limit=0)
+        Xiangqi(no_capture_limit=value)  # type: ignore[arg-type]
     with pytest.raises(ValueError):
-        Xiangqi(max_plies=0)
+        Xiangqi(max_plies=value)  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -317,6 +323,8 @@ def test_illegal_move_and_empty_undo_raise() -> None:
         state.play(parse_iccs("b2b7"))
     with pytest.raises(ValueError):
         state.play((0, 1))  # quân đen, chưa tới lượt
+    with pytest.raises(ValueError, match=r"\(\?\)"):
+        state.play((-1, 999))  # ô ngoài bàn: thông báo không in tên ô sai
     with pytest.raises(ValueError):
         state.undo()
 

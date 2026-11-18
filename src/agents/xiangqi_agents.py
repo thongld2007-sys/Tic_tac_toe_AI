@@ -206,8 +206,17 @@ def evaluate_xiangqi(state: Xiangqi, player: int | None = None) -> float:
     return float(red_score if target == RED else -red_score)
 
 
-def score_xiangqi_move(state: Xiangqi, move: Move) -> float:
-    """Chấm điểm nhanh O(1) cho nước đi `move` (MVV-LVA cho ăn quân + tiến bộ vị trí PST)."""
+def score_xiangqi_move(
+    state: Xiangqi,
+    move: Move,
+    *,
+    capture_bonus: float = 10_000.0,
+) -> float:
+    """Chấm điểm nhanh O(1) cho nước đi `move` (MVV-LVA cho ăn quân + tiến bộ vị trí PST).
+
+    `capture_bonus` cộng thêm nền cho nước ăn quân để xếp trước nước đi thường trong
+    Alpha-Beta; truyền `capture_bonus=0.0` khi cần điểm thô không bão hòa cho `progressive_bias`.
+    """
     f, t = move
     attacker = state.piece_at(f)
     victim = state.piece_at(t)
@@ -217,7 +226,7 @@ def score_xiangqi_move(state: Xiangqi, move: Move) -> float:
         # MVV-LVA: ưu tiên ăn quân có giá trị lớn bằng quân có giá trị nhỏ
         mvv = _ABS_PIECE_VALUE[victim + PAWN]
         lva = _ABS_PIECE_VALUE[attacker + PAWN]
-        return 10_000.0 + mvv * 16.0 - lva * 0.1 + pst_delta
+        return capture_bonus + mvv * 16.0 - lva * 0.1 + pst_delta
     return float(pst_delta)
 
 
@@ -499,11 +508,14 @@ class AlphaBetaXiangqi(Agent):
             raise TypeError(f"AlphaBetaXiangqi chỉ hỗ trợ Xiangqi, nhận được {type(state)!r}")
         if state.is_terminal():
             raise ValueError("Ván đã kết thúc, không còn nước để chọn")
-        if budget.depth is not None and (isinstance(budget.depth, bool) or budget.depth < 1):
-            raise ValueError(f"budget.depth phải >= 1, nhận được {budget.depth!r}")
+        if budget.depth is not None and (
+            isinstance(budget.depth, bool) or not isinstance(budget.depth, int) or budget.depth < 1
+        ):
+            raise ValueError(f"budget.depth phải là số nguyên >= 1, nhận được {budget.depth!r}")
         if budget.time_s is not None:
             if (
                 isinstance(budget.time_s, bool)
+                or not isinstance(budget.time_s, (int, float))
                 or not math.isfinite(budget.time_s)
                 or budget.time_s <= 0.0
             ):
@@ -636,6 +648,8 @@ def rollout_xiangqi_l4(
     player_at_start = state.current_player()
     start_count = state.move_count()
     d_cut = cutoff_depth if max_moves is None else max_moves
+    if isinstance(d_cut, bool) or not isinstance(d_cut, int) or d_cut < 0:
+        raise ValueError(f"max_moves phải là số nguyên >= 0, nhận được {d_cut!r}")
     plies = 0
 
     try:

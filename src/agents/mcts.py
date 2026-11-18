@@ -67,8 +67,9 @@ def compute_move_prior(state: GameState, move: Move, player: int) -> float:
     if isinstance(state, Xiangqi):
         from src.agents.xiangqi_agents import score_xiangqi_move
 
-        raw_xq = score_xiangqi_move(state, move)
-        return math.tanh(max(0.0, raw_xq) / 2500.0)
+        # Bỏ phần bù 10_000 dành cho sắp xếp nước ăn quân để tanh không bị bão hòa ở ~1.0
+        raw_xq = score_xiangqi_move(state, move, capture_bonus=0.0)
+        return math.tanh(max(0.0, raw_xq) / 6000.0)
     board = state.board
     size = int(board.shape[0])
     if size <= 3:

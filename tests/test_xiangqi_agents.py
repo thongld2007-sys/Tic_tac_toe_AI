@@ -96,6 +96,8 @@ def test_alphabeta_xiangqi_validation_and_params() -> None:
     with pytest.raises(ValueError):
         agent.select_move(st, Budget(depth=0))
     with pytest.raises(ValueError):
+        agent.select_move(st, Budget(depth=2.5))  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
         agent.select_move(st, Budget(time_s=0.0))
 
 
@@ -185,6 +187,10 @@ def test_rollout_xiangqi_l4_preserves_state_and_bounds() -> None:
     with pytest.raises(ValueError):
         rollout_xiangqi_l4(st, rng, cutoff_depth=-1)
     with pytest.raises(ValueError):
+        rollout_xiangqi_l4(st, rng, max_moves=-1)
+    with pytest.raises(ValueError):
+        rollout_xiangqi_l4(st, rng, max_moves=True)
+    with pytest.raises(ValueError):
         rollout_xiangqi_l4(st, rng, tau=0.0)
 
 
@@ -199,6 +205,13 @@ def test_mcts_xiangqi_finds_mate_and_supports_progressive_bias() -> None:
     assert st.winner() == RED
 
     # Kiểm tra tương thích với progressive_bias (compute_move_prior trên Xiangqi) và reuse_tree
+    # Đảm bảo ăn Xe có prior lớn hơn hẳn ăn Tốt (không bị bão hòa tanh ở ~1.0)
+    st_cap = Xiangqi("3k5/9/4r4/9/4R2p1/9/9/9/9/5K3 w - - 0 1")
+    prior_rook = compute_move_prior(st_cap, parse_iccs("e5e7"), RED)
+    prior_pawn = compute_move_prior(st_cap, parse_iccs("e5h5"), RED)
+    assert 0.0 < prior_pawn < prior_rook < 1.0
+    assert prior_rook - prior_pawn > 0.5
+
     st2 = Xiangqi()
     prior = compute_move_prior(st2, st2.legal_moves()[0], RED)
     assert 0.0 <= prior <= 1.0

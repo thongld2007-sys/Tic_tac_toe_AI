@@ -1,0 +1,36 @@
+# P4.2a (Bonus B2 & B3): Khảo sát các biến thể UCT (standard, no_sqrt, no_log, sqrt_n)
+# và các cải tiến UCT (ucb1_tuned, progressive_bias) trên bàn Caro 9×9.
+# Giao thức giống R3: 200 ván mỗi cấu hình, đổi lượt đi trước (swap_first: true),
+# opening_plies = 2, c_code = 1.0 (c_[0,1] = 0.5).
+# Chạy: python -m experiments.run configs/p42a_b2_b3_9x9.yaml --workers 8
+name: p42a_b2_b3_9x9
+seed: 2026
+games: 200
+swap_first: true
+opening_plies: 2
+game:
+  type: gomoku
+  size: 9
+matchups:
+  - a:
+      type: mcts
+      rollout: l0
+      selection: robust
+      uct_variant: [standard, no_sqrt, no_log, sqrt_n, ucb1_tuned, progressive_bias]
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 1.0
+      budget:
+        iterations: [40, 80, 160, 250]
+    b:
+      type: mcts
+      rollout: l0
+      selection: robust
+      uct_variant: standard
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 1.0
+      budget:
+        iterations: 80

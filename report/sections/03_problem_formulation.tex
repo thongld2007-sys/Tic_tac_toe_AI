@@ -10,4 +10,42 @@
 \subsection{Mathematical Basis of UCT}
 \label{subsec:math_uct}
 
-\textit{[TV1 -- P4.1a / P5.1a (bonus B1): Hoeffding's inequality, the derivation of UCB1 and of UCT with $c = \sqrt{2}$, non-stationarity of rewards inside the tree, and the regret bound.]}
+UCT treats the choice of a move at each tree node as a multi-armed bandit problem: each of the $K$ legal moves is an arm, and one simulation through child $i$ returns one random reward. The score $W_i/N_i + c\sqrt{\ln N_p/N_i}$ is an upper confidence bound on the true mean reward of that move. This subsection shows where the square root, the logarithm, and the constant $\sqrt{2}$ come from, and what guarantee they give.
+
+\subsubsection{Hoeffding's inequality}
+Let $X_1,\dots,X_n$ be independent rewards in $[a,b]$ with mean $\mu$, and let $\bar{X}_n$ be their average. Hoeffding's inequality~\cite{hoeffding1963probability} states that, for every $\varepsilon > 0$,
+\begin{equation}
+\Pr\left(\bar{X}_n \ge \mu + \varepsilon\right) \le \exp\left(-\frac{2n\varepsilon^2}{(b-a)^2}\right),
+\label{eq:hoeffding}
+\end{equation}
+and the same bound holds for $\Pr(\bar{X}_n \le \mu - \varepsilon)$. Setting the right-hand side to $\delta$ and solving for $\varepsilon$ gives the deviation that is exceeded with probability at most $\delta$:
+\begin{equation}
+\varepsilon = (b-a)\sqrt{\frac{\ln(1/\delta)}{2n}}.
+\label{eq:radius}
+\end{equation}
+The uncertainty of an average shrinks as $1/\sqrt{n}$; this is the origin of the square root.
+
+\subsubsection{From Hoeffding to UCB1 and $c=\sqrt{2}$}
+UCB1~\cite{auer2002finite} is optimistic: it scores each arm by the largest mean that is still plausible, $\bar{X}_i + \varepsilon$, and plays the arm with the highest score. A fixed $\delta$ is not enough, because an arm that was unlucky early would be abandoned forever with constant probability, and the loss would grow linearly. UCB1 therefore lets the confidence level tighten with the total number of plays $t$ by taking $\delta = t^{-4}$. Substituting in~\eqref{eq:radius} with rewards in $[0,1]$ gives
+\begin{equation}
+\mathrm{UCB1}(i) = \bar{X}_i + \sqrt{\frac{2\ln t}{n_i}},
+\label{eq:ucb1}
+\end{equation}
+which is the UCT formula with $\bar{X}_i = W_i/N_i$, $n_i = N_i$, $t = N_p$, and $c = \sqrt{2}$. The logarithm has two roles. It makes the failure probabilities $t^{-4}$ small enough to be summed over all time steps, and it grows without bound, so the bonus of a neglected arm keeps rising until that arm is tried again: no arm is ever discarded permanently.
+
+Equation~\eqref{eq:radius} is proportional to the reward range $b-a$. Our implementation scores a win as $+1$, a draw as $0$, and a loss as $-1$, so $b-a = 2$ and a constant $c$ on the $[0,1]$ scale of~\eqref{eq:ucb1} corresponds to $2c$ in our code.
+
+\subsubsection{Regret bound}
+Let $\mu^{*}$ be the mean of the best arm, $\Delta_i = \mu^{*} - \mu_i$ the gap of arm $i$, and $T_i(n)$ the number of times arm $i$ is played in the first $n$ plays. The regret is the expected loss relative to always playing the best arm, $R_n = \sum_i \Delta_i\,\mathbb{E}[T_i(n)]$. A suboptimal arm $i$ can be selected at time $t$ only if (a) the score of the best arm is below $\mu^{*}$, (b) the average of arm $i$ exceeds $\mu_i$ by more than its bonus, or (c) the bonus of arm $i$ is still larger than $\Delta_i/2$. By~\eqref{eq:hoeffding}, events (a) and (b) each have probability at most $t^{-4}$ for any fixed play counts, and (c) is impossible once $n_i \ge 8\ln n/\Delta_i^2$. Summing over time gives~\cite{auer2002finite}
+\begin{equation}
+\mathbb{E}[T_i(n)] \le \frac{8\ln n}{\Delta_i^2} + 1 + \frac{\pi^2}{3},
+\label{eq:plays}
+\end{equation}
+\begin{equation}
+R_n \le 8\sum_{i:\Delta_i>0}\frac{\ln n}{\Delta_i} + \left(1+\frac{\pi^2}{3}\right)\sum_{i}\Delta_i .
+\label{eq:regret}
+\end{equation}
+The regret grows only logarithmically, which is the best possible order~\cite{lai1985asymptotically}, and the average regret $R_n/n$ tends to zero. Two consequences matter for the rest of this paper. First, by~\eqref{eq:plays} every suboptimal move receives only $O(\ln n)$ of the $n$ visits, so almost all visits go to the best move; this is why the most visited child is a reliable final choice. Second, the cost of separating two moves grows as $1/\Delta_i^2$, so nearly equal moves need many iterations.
+
+\subsubsection{Non-stationary rewards inside the tree}
+The analysis above assumes independent, identically distributed rewards. Inside the tree this is false: the reward of child $i$ comes from a simulation that passes through the subtree below $i$, and the selection policy in that subtree changes as its own statistics accumulate. The expected reward of a move therefore drifts over time, and successive rewards are dependent. Kocsis and Szepesv\'ari~\cite{kocsis2006bandit} replace the i.i.d.\ assumption by two weaker ones: the average reward of each arm converges, and tail bounds of the form~\eqref{eq:hoeffding} hold around the drifting expectation when the bonus is $2C_p\sqrt{\ln t/n_i}$. They prove by induction from the leaves upward that these conditions hold at every node. For rewards in $[0,1]$, $C_p = 1/\sqrt{2}$ gives again $c = \sqrt{2}$. Under these conditions the bias of the value estimated at the root is $O(\ln n/n)$, and the probability of choosing a suboptimal move at the root tends to zero as $n \to \infty$, so UCT converges to the minimax decision. The guarantee is asymptotic: the number of iterations needed can be very large on unfavorable trees~\cite{coquelin2007bandit}, and $\sqrt{2}$ is a value that is sufficient for the proof, not the value that is best for a finite budget. This is why $c$ is tuned experimentally and why the claim that MCTS never loses on $3\times 3$ Tic-Tac-Toe must be verified for a concrete iteration budget.

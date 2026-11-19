@@ -40,6 +40,8 @@ from collections.abc import Callable
 from math import inf, log, sqrt
 from typing import Any
 
+from src.agents.alphabeta import lines_through
+from src.agents.alphabeta_gomoku import score_move_local
 from src.agents.base import Agent, Budget, RootStat
 from src.agents.minimax import terminal_value
 from src.games.base import GameState, Move
@@ -48,6 +50,33 @@ DEFAULT_C = math.sqrt(2.0)
 DEFAULT_ITERATIONS = 1000
 
 FINAL_SELECTIONS: tuple[str, ...] = ("robust", "max", "max_robust")
+UCT_VARIANTS: tuple[str, ...] = (
+    "standard",
+    "no_sqrt",
+    "no_log",
+    "sqrt_n",
+    "ucb1_tuned",
+    "progressive_bias",
+)
+
+
+def compute_move_prior(state: GameState, move: Move, player: int) -> float:
+    """Tính điểm ưu tiên cục bộ `H_i` trong `[0.0, 1.0]` cho cải tiến `progressive_bias` (B3)."""
+    from src.games.xiangqi import Xiangqi
+
+    if isinstance(state, Xiangqi):
+        from src.agents.xiangqi_agents import score_xiangqi_move
+
+        # Bỏ phần bù 10_000 dành cho sắp xếp nước ăn quân để tanh không bị bão hòa ở ~1.0
+        raw_xq = score_xiangqi_move(state, move, capture_bonus=0.0)
+        return math.tanh(max(0.0, raw_xq) / 6000.0)
+    board = state.board
+    size = int(board.shape[0])
+    if size <= 3:
+        return lines_through(move, size) / 4.0
+    raw = score_move_local(board, move, player)
+    return math.tanh(max(0.0, raw) / 2500.0)
+
 
 # Hàm rollout nhận (state, rng) và trả về giá trị trong [-1.0, +1.0]
 # theo góc nhìn của state.current_player() tại thời điểm bắt đầu rollout.
@@ -113,6 +142,11 @@ def resolve_rollout(rollout: str | RolloutFn) -> tuple[str, RolloutFn]:
             importlib.import_module("src.agents.rollouts")
         except ModuleNotFoundError:
             pass
+        if key not in ROLLOUT_POLICIES:
+            try:
+                importlib.import_module("src.agents.xiangqi_agents")
+            except ModuleNotFoundError:
+                pass
         if key in ROLLOUT_POLICIES:
             return key, ROLLOUT_POLICIES[key]
         allowed = sorted(ROLLOUT_POLICIES)
@@ -137,6 +171,8 @@ class MCTSNode:
         "untried_moves",
         "N",
         "W",
+        "W2",
+        "prior",
         "depth",
         "state_hash",
     )
@@ -149,6 +185,7 @@ class MCTSNode:
         untried_moves: list[Move],
         depth: int = 0,
         state_hash: int | None = None,
+        prior: float = 0.0,
     ) -> None:
         self.move = move
         self.parent = parent
@@ -157,6 +194,8 @@ class MCTSNode:
         self.untried_moves: list[Move] = list(untried_moves)
         self.N: int = 0
         self.W: float = 0.0
+        self.W2: float = 0.0
+        self.prior: float = prior
         self.depth: int = depth
         self.state_hash: int | None = state_hash
 
@@ -165,16 +204,43 @@ class MCTSNode:
         """Giá trị trung bình W / N theo góc nhìn của `player_just_moved`."""
         return self.W / self.N if self.N > 0 else 0.0
 
-    def uct_score(self, c: float) -> float:
-        """Điểm UCT(i) = W_i / N_i + c * sqrt(ln(N_p) / N_i)."""
+    def uct_score(self, c: float, variant: str = "standard") -> float:
+        """Điểm chọn nhánh theo biến thể công thức UCT (`variant` thuộc `UCT_VARIANTS`).
+
+        - `"standard"`: W_i / N_i + c * sqrt(ln(N_p) / N_i)
+        - `"no_sqrt"` (B2): W_i / N_i + c * (ln(N_p) / N_i)
+        - `"no_log"` (B2): W_i / N_i + c * sqrt(1 / N_i)
+        - `"sqrt_n"` (B2): W_i / N_i + c * sqrt(N_p) / (1 + N_i)
+        - `"ucb1_tuned"` (B3): W_i / N_i + c * sqrt((ln(N_p) / N_i) * scale),
+          với scale = min(1, 2 * Var_unit + 0.5 * sqrt(ln(N_p) / N_i)) (Var_unit trong [0, 0.25])
+        - `"progressive_bias"` (B3): W_i / N_i + c * sqrt(ln(N_p) / N_i) + c * H_i / (1 + N_i)
+        """
         if self.N == 0:
             return inf
+        q_val = self.W / self.N
         parent_visits = self.parent.N if self.parent is not None and self.parent.N > 0 else 1
-        return (self.W / self.N) + c * sqrt(log(parent_visits) / self.N)
 
-    def select_child_uct(self, c: float) -> MCTSNode:
-        """Chọn nút con có điểm UCT cao nhất."""
-        return max(self.children, key=lambda child: child.uct_score(c))
+        if variant == "standard":
+            return q_val + c * sqrt(log(parent_visits) / self.N)
+        if variant == "no_sqrt":
+            return q_val + c * (log(parent_visits) / self.N)
+        if variant == "no_log":
+            return q_val + c * sqrt(1.0 / self.N)
+        if variant == "sqrt_n":
+            return q_val + c * (sqrt(parent_visits) / (1.0 + self.N))
+        if variant == "ucb1_tuned":
+            log_ratio = log(parent_visits) / self.N
+            # Phương sai mẫu chuẩn hóa về [0, 0.25] trên thang [0, 1]
+            sample_var_unit = max(0.0, 0.25 * ((self.W2 / self.N) - q_val * q_val))
+            scale = min(1.0, 2.0 * sample_var_unit + 0.5 * sqrt(log_ratio))
+            return q_val + c * sqrt(log_ratio * scale)
+        if variant == "progressive_bias":
+            return q_val + c * sqrt(log(parent_visits) / self.N) + (c * self.prior) / (1.0 + self.N)
+        raise ValueError(f"uct_variant phải thuộc {UCT_VARIANTS}, nhận được {variant!r}")
+
+    def select_child_uct(self, c: float, variant: str = "standard") -> MCTSNode:
+        """Chọn nút con có điểm UCT (theo `variant`) cao nhất."""
+        return max(self.children, key=lambda child: child.uct_score(c, variant))
 
 
 def select_final_child(
@@ -256,6 +322,7 @@ class MCTSAgent(Agent):
         rollout: str | RolloutFn = "random",
         rollout_depth: int | None = None,
         reuse_tree: bool = False,
+        uct_variant: str = "standard",
     ) -> None:
         super().__init__()
         if isinstance(c, bool) or not isinstance(c, (int, float)):
@@ -266,6 +333,9 @@ class MCTSAgent(Agent):
 
         if selection not in FINAL_SELECTIONS:
             raise ValueError(f"selection phải thuộc {FINAL_SELECTIONS}, nhận được {selection!r}")
+
+        if not isinstance(uct_variant, str) or uct_variant not in UCT_VARIANTS:
+            raise ValueError(f"uct_variant phải thuộc {UCT_VARIANTS}, nhận được {uct_variant!r}")
 
         if not isinstance(use_candidates, bool):
             raise ValueError(f"use_candidates phải là bool, nhận được {use_candidates!r}")
@@ -302,6 +372,7 @@ class MCTSAgent(Agent):
 
         self.c = c_val
         self.selection = selection
+        self.uct_variant = uct_variant
         self.rollout = rollout_name
         self.rollout_fn = resolved_fn
         self._rollout_accepts_max_moves = accepts_max_moves
@@ -310,13 +381,16 @@ class MCTSAgent(Agent):
         self.candidate_radius = candidate_radius
         self.reuse_tree = reuse_tree
         self.seed = seed
-        self.name = f"mcts-c{self.c:.2f}-{selection}"
+        if uct_variant == "standard":
+            self.name = f"mcts-c{self.c:.2f}-{selection}"
+        else:
+            self.name = f"mcts-c{self.c:.2f}-{selection}-{uct_variant}"
         self._rng = random.Random(seed)
         self.last_root: MCTSNode | None = None
 
     def get_params(self) -> dict[str, Any]:
-        """Trả về từ điển đầy đủ các tham số cấu hình (R2.6) của agent."""
-        return {
+        """Trả về từ điển đầy đủ các tham số cấu hình (R2.6 & B2/B3) của agent."""
+        params: dict[str, Any] = {
             "c": self.c,
             "selection": self.selection,
             "rollout": self.rollout,
@@ -326,6 +400,9 @@ class MCTSAgent(Agent):
             "reuse_tree": self.reuse_tree,
             "seed": self.seed,
         }
+        if self.uct_variant != "standard":
+            params["uct_variant"] = self.uct_variant
+        return params
 
     def reset_tree(self) -> None:
         """Xóa cây tìm kiếm đã lưu (dùng khi bắt đầu ván mới nếu bật `reuse_tree=True`)."""
@@ -379,6 +456,7 @@ class MCTSAgent(Agent):
         while curr is not None:
             curr.N += 1
             curr.W += value
+            curr.W2 += value * value
             value = -value
             curr = curr.parent
 
@@ -450,7 +528,7 @@ class MCTSAgent(Agent):
 
                 # 1. Selection: đi xuống theo UCT khi nút đã mở hết các nhánh con.
                 while not node.untried_moves and node.children and not state.is_terminal():
-                    node = node.select_child_uct(self.c)
+                    node = node.select_child_uct(self.c, self.uct_variant)
                     assert node.move is not None
                     state.play(node.move)
 
@@ -464,6 +542,11 @@ class MCTSAgent(Agent):
                     )
                     move = node.untried_moves.pop()
                     player = state.current_player()
+                    prior = (
+                        compute_move_prior(state, move, player)
+                        if self.uct_variant == "progressive_bias"
+                        else 0.0
+                    )
                     state.play(move)
                     child = MCTSNode(
                         move=move,
@@ -472,6 +555,7 @@ class MCTSAgent(Agent):
                         untried_moves=self._moves_for(state),
                         depth=node.depth + 1,
                         state_hash=state.hash(),
+                        prior=prior,
                     )
                     node.children.append(child)
                     node = child
@@ -507,7 +591,7 @@ class MCTSAgent(Agent):
                 "N": ch.N,
                 "W": ch.W,
                 "q": ch.q,
-                "uct": ch.uct_score(self.c),
+                "uct": ch.uct_score(self.c, self.uct_variant),
             }
             for ch in sorted(root.children, key=lambda c_node: (-c_node.N, -c_node.q))
             if ch.move is not None

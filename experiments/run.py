@@ -59,6 +59,7 @@ from src.agents.alphabeta import AlphaBetaAgent
 from src.agents.alphabeta_gomoku import AlphaBetaGomoku
 from src.agents.base import Agent, Budget
 from src.agents.mcts import MCTSAgent
+from src.agents.mcts_parallel import RootParallelMCTSAgent
 from src.agents.minimax import MinimaxAgent
 from src.agents.random_agent import RandomAgent
 from src.agents.xiangqi_agents import AlphaBetaXiangqi, XiangqiMCTSAgent
@@ -190,6 +191,25 @@ def _build_mcts(params: Mapping[str, Any], seed: int) -> Agent:
     return MCTSAgent(seed=seed, **params)
 
 
+MCTS_PARALLEL_PARAMS = (
+    "num_workers",
+    "c",
+    "selection",
+    "uct_variant",
+    "rollout",
+    "rollout_depth",
+    "use_candidates",
+    "candidate_radius",
+    "split_iterations",
+    "executor",
+)
+
+
+def _build_mcts_parallel(params: Mapping[str, Any], seed: int) -> Agent:
+    _check_params("agent mcts_parallel", params, MCTS_PARALLEL_PARAMS)
+    return RootParallelMCTSAgent(seed=seed, **params)
+
+
 ALPHABETA_XIANGQI_PARAMS = (
     "default_depth",
     "quiescence_depth",
@@ -233,6 +253,7 @@ AGENT_BUILDERS: dict[str, AgentBuilder] = {
     "alphabeta_gomoku": _build_alphabeta_gomoku,
     "alphabeta_xiangqi": _build_alphabeta_xiangqi,
     "mcts": _build_mcts,
+    "mcts_parallel": _build_mcts_parallel,
     "mcts_xiangqi": _build_mcts_xiangqi,
 }
 

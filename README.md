@@ -140,6 +140,21 @@ chứng tỷ lệ thắng của cả hai agent trước `RandomAgent`:
 python -m experiments.run configs/p42b_xiangqi_vs_random.yaml --workers 8
 ```
 
+Giao diện đồ họa Cờ tướng (`src/ui/xiangqi_gui.py`, P4.3b) hỗ trợ chơi Người vs AI, AI vs AI,
+nạp thế cờ mẫu / FEN, hoàn tác (Undo) và xem lịch sử ICCS; đồng thời chạy bộ thực nghiệm so sánh
+`AlphaBetaXiangqi` và `XiangqiMCTSAgent` (cùng thời gian 0,10 s / 0,20 s, mở rộng độ sâu và số
+lượt mô phỏng, tách theo bên Đỏ đi trước / Đen đi sau):
+
+```bash
+python -m src.ui.xiangqi_gui
+python -m experiments.run configs/p43b_xiangqi_exp.yaml --workers 6 --out experiments/results/p43b_xiangqi_exp.csv
+python -m experiments.p43b_xiangqi
+```
+
+Kết quả ván đấu nằm tại `experiments/results/p43b_xiangqi_exp.csv` (360 ván) và bảng tổng hợp
+thống kê (Wilson 95%, bootstrap 95%, kiểm định $z$, tách Đỏ/Đen) nằm tại
+`experiments/results/p43b_xiangqi_summary.csv`.
+
 ## Đóng góp
 
 | Thành viên | Mã việc |

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import yaml
@@ -43,6 +44,11 @@ def test_p43b_statistical_helpers_and_synthetic_summary() -> None:
     z_val, p_val = one_sample_score_z_test([1.0] * 50 + [0.0] * 10, mu0=0.5)
     assert z_val > 4.0
     assert p_val < 1e-4
+
+    # Khi 60/60 thắng (phương sai mẫu = 0), dùng SE theo H0 -> z = sqrt(60) ≈ 7.7460
+    z_all, p_all = one_sample_score_z_test([1.0] * 60, mu0=0.5)
+    assert math.isclose(z_all, math.sqrt(60.0), rel_tol=1e-9)
+    assert 0.0 < p_all < 1e-12
 
     synthetic_rows = []
     for g in range(6):

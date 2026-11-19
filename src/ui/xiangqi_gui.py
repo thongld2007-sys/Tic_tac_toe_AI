@@ -1106,14 +1106,14 @@ class XiangqiGUI:
                 width=1.5,
             )
 
-        # Dòng sông Sở Hà - Hán Giới
+        # Dòng sông Sở Hà - Hán Giới (dùng cỡ chữ âm = pixel để khớp tỷ lệ trên màn DPI cao)
         river_y = y0 + 4.5 * step
-        river_font = ("Serif", max(11, int(step * 0.36)), "bold")
+        river_font = ("Serif", -max(11, int(step * 0.36)), "bold")
         canvas.create_text(x0 + 2.0 * step, river_y, text="楚 河", fill="#78350F", font=river_font)
         canvas.create_text(x0 + 6.0 * step, river_y, text="漢 界", fill="#78350F", font=river_font)
 
         # Nhãn tọa độ ICCS (cột a..i, hàng 9..0)
-        coord_font = ("Segoe UI", max(8, int(step * 0.22)))
+        coord_font = ("Segoe UI", -max(9, int(step * 0.22)))
         for c in range(COLS):
             px = x0 + c * step
             canvas.create_text(
@@ -1139,11 +1139,11 @@ class XiangqiGUI:
                     cx - rad, cy - rad, cx + rad, cy + rad, outline="#D97706", width=2.5
                 )
 
-        # Vẽ quân cờ trên 90 giao điểm
+        # Vẽ quân cờ trên 90 giao điểm (cỡ chữ âm = pixel để chữ luôn nằm gọn trong vòng tròn)
         in_check = self.session.state.in_check()
         cur_side = self.session.state.current_player()
         piece_rad = step * 0.41
-        piece_font = ("Serif", max(12, int(step * 0.42)), "bold")
+        piece_font = ("Serif", -max(12, int(step * 0.42)), "bold")
 
         for sq in range(SQUARES):
             piece = self.session.state.piece_at(sq)

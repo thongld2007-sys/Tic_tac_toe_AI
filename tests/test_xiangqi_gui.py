@@ -126,3 +126,121 @@ def test_xiangqi_presets_and_headless_demo() -> None:
         ]
     )
     assert rc == 0
+
+
+def test_select_square_edge_cases_switch_and_capture() -> None:
+    """Kiểm tra chọn ô trống, ô đối thủ, ô ngoài bàn, đổi quân chọn và ăn quân trên free_rook."""
+    session = XiangqiSession(player_red="human", player_black="human")
+    session.load_preset("free_rook")
+
+    # Nhấp ô ngoài bàn hoặc ô trống khi chưa chọn quân -> không thay đổi
+    assert session.select_square(-1) == []
+    assert session.select_square(SQUARES) == []
+    assert session.select_square(0) == []
+    assert session.selected_square is None
+
+    # Nhấp quân Đen (Xe Đen e7) khi tới lượt Đỏ -> không chọn được
+    _, black_rook_sq = parse_iccs("e2e7")
+    assert session.select_square(black_rook_sq) == []
+    assert session.selected_square is None
+
+    # Chọn Tướng Đỏ f0 rồi đổi sang chọn Xe Đỏ e2
+    red_king_sq, _ = parse_iccs("f0f1")
+    red_rook_sq, _ = parse_iccs("e2e7")
+    session.select_square(red_king_sq)
+    assert session.selected_square == red_king_sq
+    session.select_square(red_rook_sq)
+    assert session.selected_square == red_rook_sq
+    assert black_rook_sq in session.legal_targets
+
+    # Nhấp vào một ô trống không hợp lệ -> hủy chọn
+    assert session.select_square(0) == []
+    assert session.selected_square is None
+
+    # Chọn lại Xe Đỏ e2 và ăn Xe Đen e7
+    session.select_square(red_rook_sq)
+    played = session.select_square(black_rook_sq)
+    assert len(played) == 1
+    assert played[0].iccs == "e2e7"
+    assert session.state.piece_at(black_rook_sq) == ROOK
+    assert session.state.current_player() == BLACK
+
+
+def test_undo_multiple_steps_and_validation() -> None:
+    """Kiểm tra hoàn tác nhiều bước (`steps=1`, `steps=3`, vượt quá lịch sử, bàn trống, lỗi)."""
+    session = XiangqiSession(player_red="human", player_black="human")
+    assert session.undo() == 0
+
+    moves_iccs = ("h2e2", "h9g7", "h0g2", "i9h9")
+    for iccs in moves_iccs:
+        session.play_human_move(parse_iccs(iccs))
+    assert len(session.history) == 4
+    assert session.state.move_count() == 4
+
+    # Hoàn tác 1 bước
+    assert session.undo(steps=1) == 1
+    assert len(session.history) == 3
+    assert session.state.current_player() == BLACK
+
+    # Hoàn tác 2 bước nữa -> còn 1 nước (lượt Đen)
+    assert session.undo(steps=2) == 2
+    assert len(session.history) == 1
+    assert session.history[0].iccs == "h2e2"
+
+    # Truyền steps > len(history) -> hoàn tác hết phần còn lại
+    assert session.undo(steps=10) == 1
+    assert len(session.history) == 0
+    assert session.state.move_count() == 0
+    assert session.state.current_player() == RED
+
+    with pytest.raises(ValueError, match="steps"):
+        session.play_human_move(parse_iccs("h2e2"))
+        session.undo(steps=0)
+    with pytest.raises(ValueError, match="steps"):
+        session.undo(steps=True)
+
+
+def test_load_invalid_fen_and_preset_raises() -> None:
+    """Kiểm tra nạp chuỗi FEN sai định dạng, thiếu Tướng và tên thế cờ mẫu không tồn tại."""
+    session = XiangqiSession()
+    for bad_fen in (
+        "",
+        "not-a-valid-fen",
+        "9/9/9/9/9/9/9/9/9/9 w - - 0 1",  # thiếu cả hai Tướng
+        "4k4/9/9/9/9 w - - 0 1",  # thiếu hàng
+    ):
+        with pytest.raises(ValueError):
+            session.new_game(fen=bad_fen)
+
+    with pytest.raises(ValueError, match="Thế cờ mẫu"):
+        session.load_preset("khong_ton_tai")
+
+
+def test_run_ai_vs_ai_to_completion_and_mode_switching() -> None:
+    """Kiểm tra chạy AI vs AI tới hết ván (terminal) và chuyển đổi đủ 4 chế độ chơi."""
+    # Thế tàn cuộc hai Xe Đỏ đấu Tướng Đen đơn độc: Alpha-Beta Đỏ phải chiếu bí nhanh tới hết ván
+    endgame_fen = "4k4/9/9/9/9/9/9/1R7/9/R3K4 w - - 0 1"
+    session = XiangqiSession(
+        fen=endgame_fen,
+        max_plies=40,
+        player_red=XiangqiPlayerConfig(agent_type="alphabeta_xiangqi", depth=2, quiescence_depth=0),
+        player_black="random",
+    )
+    assert session.match_mode == "ai_vs_ai"
+    records = session.run_ai_vs_ai()
+    assert len(records) >= 1
+    assert session.state.is_terminal()
+    assert session.state.winner() == RED
+    assert session.last_move == records[-1].move
+    assert "nodes" in session.last_stats
+
+    with pytest.raises(ValueError, match="kết thúc"):
+        session.step_ai_move()
+
+    # Kiểm tra chuyển đủ 4 chế độ chơi và đổi thuật toán giữa chừng
+    session.new_game()
+    for mode_name in ("human_vs_ai", "ai_vs_human", "ai_vs_ai", "human_vs_human"):
+        session.set_mode(mode_name)
+        assert session.match_mode == mode_name
+    with pytest.raises(ValueError, match="mode"):
+        session.set_mode("che_do_la")

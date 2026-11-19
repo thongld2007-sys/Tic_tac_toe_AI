@@ -5,7 +5,32 @@
 \subsection{Game Model}
 \label{subsec:game_model}
 
-\textit{[TV1 -- P5.1a: define states $s \in \mathcal{S}$, the player to move $p(s) \in \{+1, -1\}$, the legal moves $\mathcal{A}(s)$, the transition function $T(s, a)$, the terminal condition, and the terminal payoff $u(s) \in \{-1, 0, +1\}$ for $3\times 3$ Tic-Tac-Toe and $n\times n$ Gomoku, including the winning rule used.]}
+All games in this study are deterministic, two-player, zero-sum games with perfect information and alternating moves. We model each game by the tuple $(\mathcal{S}, s_0, p, \mathcal{A}, T, u)$:
+\begin{itemize}
+    \item $\mathcal{S}$ is the set of states and $s_0$ the initial state. A state stores the board and the player to move.
+    \item $p(s) \in \{+1, -1\}$ is the player to move; $+1$ (X, or Red in Xiangqi) always moves first, and $p(T(s,a)) = -p(s)$.
+    \item $\mathcal{A}(s)$ is the set of legal moves, empty if and only if $s$ is terminal.
+    \item $T(s, a)$ is the state reached by playing $a \in \mathcal{A}(s)$ in $s$.
+    \item $u(s) \in \{+1, 0, -1\}$ is the payoff of a terminal state from the point of view of player $+1$: win, draw, or loss. Player $-1$ receives $-u(s)$.
+\end{itemize}
+The Minimax value is
+\begin{equation}
+V(s) = \begin{cases}
+u(s) & \text{if } s \text{ is terminal},\\
+\max_{a \in \mathcal{A}(s)} V(T(s,a)) & \text{if } p(s) = +1,\\
+\min_{a \in \mathcal{A}(s)} V(T(s,a)) & \text{if } p(s) = -1.
+\end{cases}
+\label{eq:minimax}
+\end{equation}
+Our search code uses the equivalent negamax form, in which values are taken from the point of view of the player to move.
+
+\textbf{Tic-Tac-Toe.} The board is $3\times 3$ and $s_0$ is empty. A move places the mover's mark on an empty cell, so $|\mathcal{A}(s)| \le 9$ and a game lasts at most nine plies. A state is terminal when one player has three marks in a row, column, or diagonal (that player wins) or when the board is full (draw). The game value is $V(s_0) = 0$.
+
+\textbf{Gomoku.} The board is $n\times n$ with $n \in \{9, 15\}$, and a move places a stone on any empty cell. We use the free-style rule: a player wins by forming a line of \emph{five or more} consecutive stones horizontally, vertically, or diagonally, and the game is drawn when the board fills up. The implementation also supports the Vietnamese \emph{block-two-ends} variant, in which a line that is closed by opponent stones at both ends does not win, but all experiments in this paper use the free-style rule. Because $|\mathcal{A}(s)|$ is up to $n^2$, all agents search only \emph{candidate moves}: the empty cells within Chebyshev distance $2$ of an existing stone (the center when the board is empty). This restriction belongs to the agents, not to the game.
+
+\textbf{Xiangqi.} For the Xiangqi extension, a state is a $10\times 9$ board with the usual piece set, and a move is a pair (origin square, destination square) that respects the movement rules of the moving piece, including blocked horse legs and elephant eyes, the river, the palace, and cannon captures over exactly one screen. A move is legal only if it does not leave the mover's general in check, and the two generals may not face each other on an open file. A player with no legal move loses, whether or not it is in check. The game is drawn after $120$ consecutive plies without a capture, on the third repetition of a position, or at an optional ply limit. The move generator reproduces the reference perft counts $44$, $1\,920$, $79\,666$, $3\,290\,240$, and $133\,312\,995$ at depths $1$--$5$ from the initial position.
+
+\textbf{Rewards in MCTS.} A simulation that ends in a terminal state $s$ returns $u(s)$, and each tree node accumulates the rewards from the point of view of the player who made the move leading to that node, so $W_i/N_i \in [-1, 1]$. The assignment states UCT on the $[0, 1]$ scale; the affine map $(u+1)/2$ converts between the two, and Section~\ref{subsec:math_uct} shows that it doubles the exploration constant: a value $c$ on the $[0, 1]$ scale corresponds to $2c$ in our code. Section~\ref{subsec:results_tv1} reports $c$ on the $[0, 1]$ scale.
 
 \subsection{Mathematical Basis of UCT}
 \label{subsec:math_uct}

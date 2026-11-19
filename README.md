@@ -39,6 +39,13 @@ Kiểm chứng "MCTS không bao giờ thua" trên 3×3 (bảng T3 và ngưỡng 
 python -m experiments.verify_never_lose
 ```
 
+Bảng T1 (số nút Minimax và Alpha-Beta) và T3 của report được sinh thành file LaTeX trong
+`report/tables/` bằng lệnh dưới đây; lệnh này cũng in tỷ lệ thắng dùng cho phần viết về F1, F2:
+
+```bash
+python -m experiments.report_tables
+```
+
 ## Giao diện đồ họa (GUI)
 
 Mở giao diện chơi trực tiếp (Người vs AI, AI vs AI, đổi thuật toán/tham số động và hoàn tác `Undo` trên cả bàn 3×3 lẫn Caro):
@@ -161,6 +168,6 @@ khoảng 7% (~107,3%) do kiểm tra đồng hồ sau khi hoàn tất mỗi rollo
 
 | Thành viên | Mã việc |
 | --- | --- |
-| TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a, P3.1b, P6.1b, P4.1a, P4.1b |
+| TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a, P3.1b, P6.1b, P4.1a, P4.1b, P5.1a |
 | TV2 | P1.2, P2.2a, P2.2b, P3.2a, P3.2b, P4.2a, P4.2b, P6.2 |
 | TV3 | P1.3a, P1.3b, P2.3a, P2.3b, P3.3b, P4.3b, P5.3a |

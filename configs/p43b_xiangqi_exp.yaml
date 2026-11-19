@@ -1,0 +1,131 @@
+# P4.3b — Thực nghiệm Cờ tướng (Xiangqi): Alpha-Beta (vật chất + PST) vs MCTS-L4
+# Chủ sở hữu: TV3. Review: TV1.
+#
+# Giao thức thực nghiệm:
+#   - Bàn Cờ tướng chuẩn 10×9 (`max_plies: 240`), 60 ván/cặp đấu, đổi bên đi trước
+#     (`swap_first: true`: mỗi cặp ván dùng chung 2 nước mở đầu ngẫu nhiên `opening_plies: 2`
+#     để tránh trùng lặp ván đấu tất định giữa Alpha-Beta và giữ công bằng giữa Đỏ/Đen).
+#   - 6 cặp đấu:
+#       0. Alpha-Beta vs MCTS-L4 cùng thời gian 0.10 s/nước
+#       1. Alpha-Beta vs MCTS-L4 cùng thời gian 0.20 s/nước
+#       2. Alpha-Beta (depth=2, quiescence=2) vs Alpha-Beta (depth=1, quiescence=0)
+#       3. MCTS-L4 (iterations=200) vs MCTS-L4 (iterations=50)
+#       4. Alpha-Beta (depth=2, quiescence=2) vs Random
+#       5. MCTS-L4 (iterations=100) vs Random
+#
+# Chạy:
+#   python -m experiments.run configs/p43b_xiangqi_exp.yaml --workers 6 --out experiments/results/p43b_xiangqi_exp.csv
+#   python -m experiments.p43b_xiangqi
+
+name: p43b_xiangqi_exp
+seed: 2026
+games: 60
+swap_first: true
+opening_plies: 2
+
+game:
+  type: xiangqi
+  max_plies: 240
+
+matchups:
+  # 0. Alpha-Beta vs MCTS-L4 cùng thời gian 0.10 s/nước
+  - a:
+      type: alphabeta_xiangqi
+      default_depth: 6
+      quiescence_depth: 2
+      use_move_ordering: true
+      use_iterative_deepening: true
+      use_tt: true
+      budget:
+        time_s: 0.1
+    b:
+      type: mcts_xiangqi
+      c: 1.0
+      selection: robust
+      rollout_depth: 4
+      reuse_tree: true
+      budget:
+        time_s: 0.1
+
+  # 1. Alpha-Beta vs MCTS-L4 cùng thời gian 0.20 s/nước
+  - a:
+      type: alphabeta_xiangqi
+      default_depth: 6
+      quiescence_depth: 2
+      use_move_ordering: true
+      use_iterative_deepening: true
+      use_tt: true
+      budget:
+        time_s: 0.2
+    b:
+      type: mcts_xiangqi
+      c: 1.0
+      selection: robust
+      rollout_depth: 4
+      reuse_tree: true
+      budget:
+        time_s: 0.2
+
+  # 2. Alpha-Beta sâu hơn + Quiescence (d=2, q=2) vs Alpha-Beta nông (d=1, q=0)
+  - a:
+      type: alphabeta_xiangqi
+      default_depth: 2
+      quiescence_depth: 2
+      use_move_ordering: true
+      use_iterative_deepening: true
+      use_tt: true
+      budget:
+        depth: 2
+    b:
+      type: alphabeta_xiangqi
+      default_depth: 1
+      quiescence_depth: 0
+      use_move_ordering: true
+      use_iterative_deepening: false
+      use_tt: true
+      budget:
+        depth: 1
+
+  # 3. MCTS-L4 tăng ngân sách mô phỏng (200 vs 50 iterations)
+  - a:
+      type: mcts_xiangqi
+      c: 1.0
+      selection: robust
+      rollout_depth: 4
+      reuse_tree: true
+      budget:
+        iterations: 200
+    b:
+      type: mcts_xiangqi
+      c: 1.0
+      selection: robust
+      rollout_depth: 4
+      reuse_tree: true
+      budget:
+        iterations: 50
+
+  # 4. Alpha-Beta (d=2, q=2) vs Random
+  - a:
+      type: alphabeta_xiangqi
+      default_depth: 2
+      quiescence_depth: 2
+      use_move_ordering: true
+      use_iterative_deepening: true
+      use_tt: true
+      budget:
+        depth: 2
+    b:
+      type: random
+
+  # 5. MCTS-L4 (100 iterations) vs Random
+  - a:
+      type: mcts_xiangqi
+      c: 1.0
+      selection: robust
+      rollout_depth: 4
+      reuse_tree: true
+      budget:
+        iterations: 100
+    b:
+      type: random
+

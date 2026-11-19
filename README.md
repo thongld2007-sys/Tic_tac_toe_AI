@@ -106,7 +106,7 @@ python -m experiments.run configs/p42a_b2_b3_9x9.yaml --workers 8
 python -m experiments.plots
 ~~~
 
-## Cờ tướng (P4.1b, P4.2b)
+## Cờ tướng (P4.1b, P4.2b, P4.3b)
 
 `src/games/xiangqi.py` cài luật cờ tướng theo cùng interface `GameState` nên MCTS và runner dùng
 được ngay (`game: {type: xiangqi, max_plies: 300}`). Một nước đi là cặp `(ô đi, ô đến)` với ô
@@ -131,10 +131,25 @@ chứng tỷ lệ thắng của cả hai agent trước `RandomAgent`:
 python -m experiments.run configs/p42b_xiangqi_vs_random.yaml --workers 8
 ```
 
+Giao diện đồ họa Cờ tướng (`src/ui/xiangqi_gui.py`, P4.3b) hỗ trợ chơi Người vs AI, AI vs AI,
+nạp thế cờ mẫu / FEN, hoàn tác (Undo) và xem lịch sử ICCS; đồng thời chạy bộ thực nghiệm so sánh
+`AlphaBetaXiangqi` và `XiangqiMCTSAgent` (cùng thời gian 0,10 s / 0,20 s, mở rộng độ sâu và số
+lượt mô phỏng, tách theo bên Đỏ đi trước / Đen đi sau):
+
+```bash
+python -m src.ui.xiangqi_gui
+python -m experiments.run configs/p43b_xiangqi_exp.yaml --workers 6 --out experiments/results/p43b_xiangqi_exp.csv
+python -m experiments.p43b_xiangqi
+```
+
+Kết quả ván đấu nằm tại `experiments/results/p43b_xiangqi_exp.csv` (360 ván) và bảng tổng hợp
+thống kê (Wilson 95%, bootstrap 95%, kiểm định $z$, tách Đỏ/Đen) nằm tại
+`experiments/results/p43b_xiangqi_summary.csv`.
+
 ## Đóng góp
 
 | Thành viên | Mã việc |
 | --- | --- |
 | TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a, P3.1b, P6.1b, P4.1a, P4.1b |
 | TV2 | P1.2, P2.2a, P2.2b, P3.2a, P3.2b, P4.2a, P4.2b, P6.2 |
-| TV3 | P1.3a, P1.3b, P2.3a, P2.3b, P5.3a |
+| TV3 | P1.3a, P1.3b, P2.3a, P2.3b, P4.3b, P5.3a |

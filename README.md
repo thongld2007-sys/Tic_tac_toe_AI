@@ -152,8 +152,10 @@ python -m experiments.p43b_xiangqi
 ```
 
 Kết quả ván đấu nằm tại `experiments/results/p43b_xiangqi_exp.csv` (360 ván) và bảng tổng hợp
-thống kê (Wilson 95%, bootstrap 95%, kiểm định $z$, tách Đỏ/Đen) nằm tại
-`experiments/results/p43b_xiangqi_summary.csv`.
+thống kê (Wilson 95%, bootstrap 95%, kiểm định $z$ theo phương sai $H_0$, tách Đỏ/Đen) nằm tại
+`experiments/results/p43b_xiangqi_summary.csv`. Lưu ý khi phân tích mức 0,10 s/nước: MCTS-L4 chỉ
+kịp duyệt ~101 nút/nước (so với ~590 nút/nước của Alpha-Beta) và dùng quá ngân sách thời gian
+khoảng 7% (~107,3%) do kiểm tra đồng hồ sau khi hoàn tất mỗi rollout L4.
 
 ## Đóng góp
 
@@ -161,4 +163,4 @@ thống kê (Wilson 95%, bootstrap 95%, kiểm định $z$, tách Đỏ/Đen) n�
 | --- | --- |
 | TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a, P3.1b, P6.1b, P4.1a, P4.1b |
 | TV2 | P1.2, P2.2a, P2.2b, P3.2a, P3.2b, P4.2a, P4.2b, P6.2 |
-| TV3 | P1.3a, P1.3b, P2.3a, P2.3b, P3.3b, P5.3a |
+| TV3 | P1.3a, P1.3b, P2.3a, P2.3b, P3.3b, P4.3b, P5.3a |

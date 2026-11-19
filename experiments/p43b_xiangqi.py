@@ -8,9 +8,13 @@ Chủ sở hữu: TV3.  Review: TV1.
 
 Đầu ra:
   - `experiments/results/p43b_xiangqi_summary.csv`: Bảng tổng hợp tỷ lệ thắng, điểm số,
-    khoảng tin cậy Wilson 95%, bootstrap 95%, kiểm định $z$ hai phía so với mốc cân bằng 0,5,
-    tách riêng kết quả khi bên A cầm **Đỏ (đi trước)** và cầm **Đen (đi sau)**, cùng số nút/nước,
+    khoảng tin cậy Wilson 95%, bootstrap 95%, kiểm định $z$ hai phía theo phương sai dưới $H_0$
+    ($\sigma_0^2 = \mu_0(1 - \mu_0) = 0{,}25$, $\mathrm{SE}_0 = \sqrt{0{,}25 / n}$), tách riêng
+    kết quả khi bên A cầm **Đỏ (đi trước)** và cầm **Đen (đi sau)**, cùng số nút/nước,
     thời gian trung bình (ms/nước) và tỷ lệ sử dụng ngân sách thời gian.
+  - Lưu ý khi phân tích kết quả 60–0 ở ngân sách 0,10 s/nước trong báo cáo: MCTS-L4 chỉ kịp
+    duyệt ~101 nút/nước (so với ~590 nút/nước của Alpha-Beta) và dùng quá ngân sách thời gian
+    khoảng 7% (~107,3%) do kiểm tra đồng hồ sau khi hoàn tất mỗi rollout L4.
 
 Cách chạy:
     python -m experiments.run configs/p43b_xiangqi_exp.yaml --workers 6
@@ -116,18 +120,21 @@ def bootstrap_mean_ci(
 
 
 def one_sample_score_z_test(scores: Sequence[float], mu0: float = 0.5) -> tuple[float, float]:
-    """Kiểm định z hai phía cho điểm trung bình `scores` so với mốc cân bằng `mu0 = 0.5`."""
+    """Kiểm định z hai phía theo phương sai dưới $H_0$: $\\sigma_0^2 = \\mu_0(1-\\mu_0)$.
+
+    Với điểm số thuộc $\\{0, 0{,}5, 1\\}$ và mốc cân bằng $\\mu_0 = 0{,}5$, sai số chuẩn dưới $H_0$
+    là $\\mathrm{SE}_0 = \\sqrt{0{,}25 / n}$, đảm bảo luôn cho giá trị $z$ thực (ví dụ 60/60 thắng
+    cho $z = \\sqrt{60} \\approx 7{,}7460$) kể cả khi phương sai mẫu bằng 0.
+    """
     n = len(scores)
-    if n <= 1:
+    if n <= 0:
+        return 0.0, 1.0
+    var_h0 = mu0 * (1.0 - mu0)
+    if var_h0 <= 0.0:
         return 0.0, 1.0
     mean_val = sum(scores) / n
-    var_val = sum((x - mean_val) ** 2 for x in scores) / (n - 1)
-    if var_val <= 1e-12:
-        if abs(mean_val - mu0) <= 1e-12:
-            return 0.0, 1.0
-        return (math.copysign(99.0, mean_val - mu0), 0.0)
-    se = math.sqrt(var_val / n)
-    z = (mean_val - mu0) / se
+    se0 = math.sqrt(var_h0 / n)
+    z = (mean_val - mu0) / se0
     p = math.erfc(abs(z) / math.sqrt(2.0))
     return z, p
 
@@ -230,7 +237,7 @@ def build_summary_rows(
                 "boot_ci_low": round(b_lo, 4),
                 "boot_ci_high": round(b_hi, 4),
                 "z_stat": round(z_val, 4),
-                "p_value": round(p_val, 6),
+                "p_value": float(f"{p_val:.6g}"),
                 "significant_005": p_val < 0.05,
                 "red_games": red_n,
                 "red_wins_a": red_wins,

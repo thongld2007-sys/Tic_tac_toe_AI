@@ -1,0 +1,64 @@
+# P3.3b: Alpha-Beta vs MCTS cùng thời gian (0.5 / 1.0 / 2.0 s/nước) trên bàn Caro 15×15 -> Bảng T7.
+# Tham số c = 1.0 trên thang thưởng [-1, 1] của MCTSAgent (tương đương c_đề = 0.5 trên thang [0, 1],
+# giá trị đạt tỷ lệ thắng cao nhất trên Caro trong khảo sát F2 của P3.1b).
+# Chạy: python -m experiments.run configs/p33b_ab_vs_mcts.yaml --workers 8
+name: p33b_ab_vs_mcts
+seed: 2026
+games: 100
+swap_first: true
+opening_plies: 2
+game:
+  type: gomoku
+  size: 15
+matchups:
+  # 1. Ngân sách 0.5 s/nước: Alpha-Beta vs MCTS (L2 và L4)
+  - a:
+      type: alphabeta_gomoku
+      radius: 2
+      max_candidates: 16
+      budget:
+        time_s: 0.5
+    b:
+      type: mcts
+      rollout: [l2, l4]
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: true
+      c: 1.0
+      budget:
+        time_s: 0.5
+  # 2. Ngân sách 1.0 s/nước: Alpha-Beta vs MCTS (L2 và L4)
+  - a:
+      type: alphabeta_gomoku
+      radius: 2
+      max_candidates: 16
+      budget:
+        time_s: 1.0
+    b:
+      type: mcts
+      rollout: [l2, l4]
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: true
+      c: 1.0
+      budget:
+        time_s: 1.0
+  # 3. Ngân sách 2.0 s/nước: Alpha-Beta vs MCTS (L2 và L4)
+  - a:
+      type: alphabeta_gomoku
+      radius: 2
+      max_candidates: 16
+      budget:
+        time_s: 2.0
+    b:
+      type: mcts
+      rollout: [l2, l4]
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: true
+      c: 1.0
+      budget:
+        time_s: 2.0

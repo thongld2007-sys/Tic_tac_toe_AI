@@ -106,17 +106,14 @@ python -m experiments.run configs/p42a_b2_b3_9x9.yaml --workers 8
 python -m experiments.plots
 ~~~
 
-## Cải tiến mô phỏng B4: Nước bắt buộc mở rộng và Song song hóa theo gốc (P4.3a)
+## Alpha-Beta vs MCTS cùng thời gian trên bàn Caro 15×15 (P3.3b)
 
-Chạy thực nghiệm đánh giá trước/sau của hai cải tiến mô phỏng B4 (`l2_b4`, `l3_b4`, `l4_b4` với thứ tự ưu tiên 4 tầng: thắng 1 bước → chặn thắng 1 bước / dừng sớm khi bị dọa đôi → tạo Bốn hở hai đầu / nước đôi 4-4 → chặn đối thủ tạo Bốn hở hai đầu; và `RootParallelMCTSAgent` trong `src/agents/mcts_parallel.py` song song hóa theo gốc với $K \in \{1, 2, 4\}$ worker):
+Chạy thực nghiệm đối đầu trực tiếp giữa `AlphaBetaGomoku` và `MCTS` (`L2`, `L4`, dùng `c = 1.0` trên thang `[-1, 1]` tức `c_đề = 0.5` theo `F2`) ở cùng ngân sách thời gian `0.5`, `1.0`, `2.0` s/nước trên bàn 15×15 (`swap_first=true`, `opening_plies=2`) và tổng hợp Bảng `T7` tách theo bên đi trước / đi sau:
 
 ~~~sh
-python -m experiments.run configs/p43a_b4_9x9.yaml --workers 4 --out experiments/results/p43a_b4_9x9.csv
-python -m experiments.run configs/p43a_b4_rootpar_9x9.yaml --workers 1 --out experiments/results/p43a_b4_rootpar_9x9.csv
-python -m experiments.p43a_b4
+python -m experiments.run configs/p33b_ab_vs_mcts.yaml --workers 8
+python -m experiments.p33b_ab_vs_mcts
 ~~~
-
-Kết quả từng ván đấu sinh từ `experiments/run.py` nằm tại `experiments/results/p43a_b4_9x9.csv` (2.400 ván) và `experiments/results/p43a_b4_rootpar_9x9.csv` (800 ván); bảng tổng hợp điểm trước/sau (kèm khoảng tin cậy Wilson 95%, bootstrap 95% và kiểm định $z$) nằm tại `experiments/results/p43a_b4_summary.csv`; bảng tốc độ mô phỏng (`rollout_sims_per_s`, `mcts_sims_per_s`) và tỷ lệ giải bẫy Ba hở hai đầu trước/sau trên bàn 9×9 và 15×15 nằm tại `experiments/results/p43a_b4_speed.csv` (lưu ý: ở chế độ `split_total_iter`, mỗi cây con chỉ có kích thước $1/K$ nên chi phí duyệt cây nông hơn, giúp hệ số tăng tốc `mcts_speed_ratio` trên bàn 15×15 có thể vượt nhẹ $K$).
 
 ## Cờ tướng (P4.1b, P4.2b)
 
@@ -143,10 +140,25 @@ chứng tỷ lệ thắng của cả hai agent trước `RandomAgent`:
 python -m experiments.run configs/p42b_xiangqi_vs_random.yaml --workers 8
 ```
 
+Giao diện đồ họa Cờ tướng (`src/ui/xiangqi_gui.py`, P4.3b) hỗ trợ chơi Người vs AI, AI vs AI,
+nạp thế cờ mẫu / FEN, hoàn tác (Undo) và xem lịch sử ICCS; đồng thời chạy bộ thực nghiệm so sánh
+`AlphaBetaXiangqi` và `XiangqiMCTSAgent` (cùng thời gian 0,10 s / 0,20 s, mở rộng độ sâu và số
+lượt mô phỏng, tách theo bên Đỏ đi trước / Đen đi sau):
+
+```bash
+python -m src.ui.xiangqi_gui
+python -m experiments.run configs/p43b_xiangqi_exp.yaml --workers 6 --out experiments/results/p43b_xiangqi_exp.csv
+python -m experiments.p43b_xiangqi
+```
+
+Kết quả ván đấu nằm tại `experiments/results/p43b_xiangqi_exp.csv` (360 ván) và bảng tổng hợp
+thống kê (Wilson 95%, bootstrap 95%, kiểm định $z$, tách Đỏ/Đen) nằm tại
+`experiments/results/p43b_xiangqi_summary.csv`.
+
 ## Đóng góp
 
 | Thành viên | Mã việc |
 | --- | --- |
 | TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a, P3.1b, P6.1b, P4.1a, P4.1b |
 | TV2 | P1.2, P2.2a, P2.2b, P3.2a, P3.2b, P4.2a, P4.2b, P6.2 |
-| TV3 | P1.3a, P1.3b, P2.3a, P2.3b, P4.3a, P5.3a |
+| TV3 | P1.3a, P1.3b, P2.3a, P2.3b, P3.3b, P5.3a |

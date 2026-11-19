@@ -1,0 +1,7 @@
+matchup,comparison,agent_a,agent_b,budget,games,wins_a,draws,losses_a,win_rate_a,wilson_ci_low,wilson_ci_high,score_a,boot_ci_low,boot_ci_high,z_stat,p_value,significant_005,red_games,red_wins_a,red_draws,red_score_a,black_games,black_wins_a,black_draws,black_score_a,avg_plies,a_nodes_per_move,b_nodes_per_move,a_ms_per_move,b_ms_per_move,a_time_pct,b_time_pct
+0,ab_vs_mcts_t010,alphabeta_xiangqi,mcts_xiangqi,time_s=0.10,60,60,0,0,1.0,0.9398,1.0,1.0,1.0,1.0,7.746,9.48574e-15,True,30,30,0,1.0,30,30,0,1.0,51.0,589.7,101.1,98.65,107.34,98.7,107.3
+1,ab_vs_mcts_t020,alphabeta_xiangqi,mcts_xiangqi,time_s=0.20,60,60,0,0,1.0,0.9398,1.0,1.0,1.0,1.0,7.746,9.48574e-15,True,30,30,0,1.0,30,30,0,1.0,51.5,1219.2,199.8,192.99,206.4,96.5,103.2
+2,ab_d2q2_vs_ab_d1q0,ab_d2_q2,ab_d1_q0,depth=2 vs 1,60,60,0,0,1.0,0.9398,1.0,1.0,1.0,1.0,7.746,9.48574e-15,True,30,30,0,1.0,30,30,0,1.0,40.3,413.6,21.2,77.87,7.08,0.0,0.0
+3,mcts_i200_vs_mcts_i50,mcts_i200,mcts_i50,iters=200 vs 50,60,48,1,11,0.8,0.6822,0.8817,0.8083,0.7083,0.9,4.7767,1.78214e-06,True,30,26,1,0.8833,30,22,0,0.7333,85.1,197.9,50.9,212.33,54.09,0.0,0.0
+4,ab_d2q2_vs_random,ab_d2_q2,random,depth=2,60,60,0,0,1.0,0.9398,1.0,1.0,1.0,1.0,7.746,9.48574e-15,True,30,30,0,1.0,30,30,0,1.0,45.6,436.7,1.0,84.77,0.01,0.0,0.0
+5,mcts_i100_vs_random,mcts_i100,random,iters=100,60,60,0,0,1.0,0.9398,1.0,1.0,1.0,1.0,7.746,9.48574e-15,True,30,30,0,1.0,30,30,0,1.0,69.9,98.9,1.0,127.7,0.01,0.0,0.0

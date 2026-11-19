@@ -1,0 +1,33 @@
+# P4.2b: Đánh giá hai agent Cờ tướng (Alpha-Beta vật chất + PST và MCTS với Rollout L4)
+# đấu với RandomAgent (tiêu chí nghiệm thu: cả hai agent thắng Random >= 95%).
+# Chạy: python -m experiments.run configs/p42b_xiangqi_vs_random.yaml --workers 8
+name: p42b_xiangqi_vs_random
+seed: 2026
+games: 100
+swap_first: true
+opening_plies: 0
+game:
+  type: xiangqi
+  max_plies: 240
+matchups:
+  - a:
+      type: alphabeta_xiangqi
+      default_depth: 2
+      quiescence_depth: 2
+      use_move_ordering: true
+      use_iterative_deepening: true
+      use_tt: true
+      budget:
+        depth: 2
+    b:
+      type: random
+  - a:
+      type: mcts_xiangqi
+      c: 1.0
+      selection: robust
+      rollout_depth: 4
+      reuse_tree: true
+      budget:
+        iterations: 100
+    b:
+      type: random

@@ -1,0 +1,15 @@
+category,board_size,variant_before,variant_after,workers,mode,rollout_sims_per_s_before,rollout_sims_per_s_after,rollout_speed_ratio,mcts_sims_per_s_before,mcts_sims_per_s_after,mcts_speed_ratio,ms_per_move_before,ms_per_move_after,open_three_solve_before,open_three_solve_after,open_three_solve_diff
+extended_forced_moves,9x9,l2,l2_b4,1,single_tree,7066.4,2427.1,0.3435,5290.5,3688.2,0.6971,37.8,54.23,0.1,0.725,0.625
+extended_forced_moves,9x9,l3,l3_b4,1,single_tree,892.3,324.0,0.3631,1075.7,777.9,0.7232,185.92,257.09,0.5,0.675,0.175
+extended_forced_moves,9x9,l4,l4_b4,1,single_tree,2416.4,1975.3,0.8175,2279.4,3318.8,1.456,87.74,60.26,0.575,0.95,0.375
+extended_forced_moves,15x15,l2,l2_b4,1,single_tree,4249.5,1728.0,0.4066,3668.0,2641.1,0.72,54.53,75.73,0.075,0.65,0.575
+extended_forced_moves,15x15,l3,l3_b4,1,single_tree,894.9,206.2,0.2304,951.2,398.3,0.4187,210.27,502.18,0.425,0.475,0.05
+extended_forced_moves,15x15,l4,l4_b4,1,single_tree,2219.3,1773.3,0.799,2107.8,3267.8,1.5503,94.88,61.2,0.625,0.9,0.275
+root_parallelization,9x9,rootpar_k1_l2_b4,rootpar_k2_l2_b4,2,unsplit_iter_per_worker,2478.1,4863.4,1.9626,4086.3,7785.5,1.9052,48.94,51.38,0.8,0.95,0.15
+root_parallelization,9x9,rootpar_k1_l2_b4,rootpar_k2_l2_b4,2,split_total_iter,2478.1,4857.1,1.96,4086.3,8378.7,2.0504,48.94,23.87,0.8,0.95,0.15
+root_parallelization,9x9,rootpar_k1_l2_b4,rootpar_k4_l2_b4,4,unsplit_iter_per_worker,2478.1,8180.8,3.3012,4086.3,11700.7,2.8634,48.94,68.37,0.5,1.0,0.5
+root_parallelization,9x9,rootpar_k1_l2_b4,rootpar_k4_l2_b4,4,split_total_iter,2478.1,8164.2,3.2946,4086.3,16527.0,4.0444,48.94,12.1,0.8,0.925,0.125
+root_parallelization,15x15,rootpar_k1_l2_b4,rootpar_k2_l2_b4,2,unsplit_iter_per_worker,1697.5,3610.8,2.1272,2665.6,5184.4,1.9449,75.03,77.16,0.575,0.85,0.275
+root_parallelization,15x15,rootpar_k1_l2_b4,rootpar_k2_l2_b4,2,split_total_iter,1697.5,3371.6,1.9862,2665.6,5365.5,2.0129,75.03,37.27,0.55,0.8,0.25
+root_parallelization,15x15,rootpar_k1_l2_b4,rootpar_k4_l2_b4,4,unsplit_iter_per_worker,1697.5,6312.9,3.7189,2665.6,8118.4,3.0457,75.03,98.54,0.6,1.0,0.4
+root_parallelization,15x15,rootpar_k1_l2_b4,rootpar_k4_l2_b4,4,split_total_iter,1697.5,5228.5,3.0802,2665.6,12398.7,4.6515,75.03,16.13,0.55,0.8,0.25

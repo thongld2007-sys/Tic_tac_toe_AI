@@ -48,7 +48,13 @@ from bisect import bisect_left
 from functools import cache
 
 from src.agents.base import Budget
-from src.agents.mcts import MCTSAgent, RolloutFn, default_rollout, register_rollout
+from src.agents.mcts import (
+    MCTSAgent,
+    RolloutFn,
+    default_rollout,
+    register_rollout,
+)
+from src.agents.mcts_parallel import RootParallelMCTSAgent, shutdown_root_process_pools
 from src.eval.patterns import evaluate as evaluate_patterns
 from src.games.base import PLAYER_O, PLAYER_X, Board, GameState, Move
 from src.games.gomoku import Gomoku
@@ -222,6 +228,144 @@ def _find_initial_wins_1d(
     return wins_set, wins_list
 
 
+def _creates_open_four_1d(
+    grid: list[int],
+    idx: int,
+    player: int,
+    win_len: int,
+    block_two: bool,
+    dirs: tuple[int, int, int, int],
+) -> bool:
+    """Kiểm tra đặt `player` vào ô trống `idx` có tạo Bốn hở hai đầu hoặc đôi 4-4 không."""
+    if win_len < 4:
+        return False
+    target_len = win_len - 1
+    opp = -player
+    threat_dirs = 0
+    for d in dirs:
+        bp = idx - d
+        b = 0
+        while grid[bp] == player:
+            b += 1
+            bp -= d
+        fp = idx + d
+        f = 0
+        while grid[fp] == player:
+            f += 1
+            fp += d
+        seg = 1 + b + f
+        if seg == target_len and grid[bp] == 0 and grid[fp] == 0:
+            if not block_two or (grid[bp - d] != opp and grid[fp + d] != opp):
+                return True
+
+        has_dir_threat = False
+        if seg == target_len and (grid[bp] == 0 or grid[fp] == 0):
+            if grid[bp] == 0 and (not block_two or not (grid[bp - d] == opp and grid[fp] == opp)):
+                has_dir_threat = True
+            if grid[fp] == 0 and (not block_two or not (grid[bp] == opp and grid[fp + d] == opp)):
+                has_dir_threat = True
+        else:
+            if grid[bp] == 0:
+                ebp = bp - d
+                ext_b = 0
+                while grid[ebp] == player:
+                    ext_b += 1
+                    ebp -= d
+                if seg + 1 + ext_b >= win_len and (
+                    not block_two or not (grid[ebp] == opp and grid[fp] == opp)
+                ):
+                    has_dir_threat = True
+            if not has_dir_threat and grid[fp] == 0:
+                efp = fp + d
+                ext_f = 0
+                while grid[efp] == player:
+                    ext_f += 1
+                    efp += d
+                if seg + 1 + ext_f >= win_len and (
+                    not block_two or not (grid[bp] == opp and grid[efp] == opp)
+                ):
+                    has_dir_threat = True
+        if has_dir_threat:
+            threat_dirs += 1
+            if threat_dirs >= 2:
+                return True
+    return False
+
+
+def _find_initial_open_fours_1d(
+    grid: list[int],
+    stones: list[int],
+    player: int,
+    win_len: int,
+    block_two: bool,
+    dirs: tuple[int, int, int, int],
+) -> tuple[set[int], list[int]]:
+    """Tìm mọi ô trống trên `grid` giúp `player` tạo Bốn hở hai đầu hoặc nước đôi 4-4."""
+    o4_set: set[int] = set()
+    o4_list: list[int] = []
+    if win_len < 4 or len(stones) < win_len - 2:
+        return o4_set, o4_list
+    min_run = win_len - 2
+    min_jump = win_len - 3
+    for s in stones:
+        for d in dirs:
+            if grid[s - d] == player:
+                continue
+            fp = s + d
+            seg = 1
+            while grid[fp] == player:
+                seg += 1
+                fp += d
+            bp = s - d
+            b_open = grid[bp] == 0
+            f_open = grid[fp] == 0
+            ebp = bp - d
+            ext_b = 0
+            if b_open:
+                while grid[ebp] == player:
+                    ext_b += 1
+                    ebp -= d
+            efp = fp + d
+            ext_f = 0
+            if f_open:
+                while grid[efp] == player:
+                    ext_f += 1
+                    efp += d
+            if b_open:
+                has_jb = (grid[ebp] == 0 and grid[ebp - d] == player) or (f_open and ext_f > 0)
+                if seg + ext_b >= min_run or (seg + ext_b == min_jump and has_jb):
+                    if bp not in o4_set and _creates_open_four_1d(
+                        grid, bp, player, win_len, block_two, dirs
+                    ):
+                        o4_set.add(bp)
+                        o4_list.append(bp)
+                if grid[ebp] == 0 and (
+                    seg + ext_b >= min_run or (seg + ext_b == min_jump and grid[ebp - d] == player)
+                ):
+                    if ebp not in o4_set and _creates_open_four_1d(
+                        grid, ebp, player, win_len, block_two, dirs
+                    ):
+                        o4_set.add(ebp)
+                        o4_list.append(ebp)
+            if f_open:
+                has_jf = (grid[efp] == 0 and grid[efp + d] == player) or (b_open and ext_b > 0)
+                if seg + ext_f >= min_run or (seg + ext_f == min_jump and has_jf):
+                    if fp not in o4_set and _creates_open_four_1d(
+                        grid, fp, player, win_len, block_two, dirs
+                    ):
+                        o4_set.add(fp)
+                        o4_list.append(fp)
+                if grid[efp] == 0 and (
+                    seg + ext_f >= min_run or (seg + ext_f == min_jump and grid[efp + d] == player)
+                ):
+                    if efp not in o4_set and _creates_open_four_1d(
+                        grid, efp, player, win_len, block_two, dirs
+                    ):
+                        o4_set.add(efp)
+                        o4_list.append(efp)
+    return o4_set, o4_list
+
+
 def _rollout_l0_gomoku(
     state: Gomoku,
     rng: random.Random,
@@ -281,8 +425,9 @@ def _rollout_tactical_gomoku(
     use_candidates: bool,
     radius: int = 2,
     max_moves: int | None = None,
+    extended_forced: bool = False,
 ) -> float:
-    """Rollout chiến thuật L1 (`use_candidates=False`) và L2 (`use_candidates=True`) trên Caro."""
+    """Rollout chiến thuật L1/L2 (`extended_forced=False`) và L2-B4 (`extended_forced=True`)."""
     if state.is_terminal():
         winner = state.winner()
         assert winner is not None
@@ -304,6 +449,16 @@ def _rollout_tactical_gomoku(
     wins_o_set, wins_o_list = _find_initial_wins_1d(
         grid, stones_o, PLAYER_O, win_len, block_two, dirs
     )
+    if extended_forced:
+        o4_x_set, o4_x_list = _find_initial_open_fours_1d(
+            grid, stones_x, PLAYER_X, win_len, block_two, dirs
+        )
+        o4_o_set, o4_o_list = _find_initial_open_fours_1d(
+            grid, stones_o, PLAYER_O, win_len, block_two, dirs
+        )
+    else:
+        o4_x_set, o4_x_list = set(), []
+        o4_o_set, o4_o_list = set(), []
 
     if use_candidates:
         in_pool = [0] * (stride * stride)
@@ -338,9 +493,13 @@ def _rollout_tactical_gomoku(
         if player == PLAYER_X:
             my_list, my_set = wins_x_list, wins_x_set
             opp_list, opp_set = wins_o_list, wins_o_set
+            my_o4_list, my_o4_set = o4_x_list, o4_x_set
+            opp_o4_list, opp_o4_set = o4_o_list, o4_o_set
         else:
             my_list, my_set = wins_o_list, wins_o_set
             opp_list, opp_set = wins_x_list, wins_x_set
+            my_o4_list, my_o4_set = o4_o_list, o4_o_set
+            opp_o4_list, opp_o4_set = o4_x_list, o4_x_set
 
         # 1. Thắng ngay ở lượt hiện tại
         for idx in my_list:
@@ -367,9 +526,39 @@ def _rollout_tactical_gomoku(
 
         idx0 = 0
         if valid_blocks:
+            if extended_forced and len(valid_blocks) >= 2:
+                return float(opp * player_at_start)
             idx0 = valid_blocks[0] if len(valid_blocks) == 1 else rng.choice(valid_blocks)
-        else:
-            # 3. Chọn ngẫu nhiên từ tập ứng viên (L2) hoặc toàn bộ ô trống (L1)
+        elif extended_forced:
+            # 3. Nước bắt buộc mở rộng B4: tạo Bốn hở hai đầu / nước đôi 4-4
+            valid_my_o4: list[int] = [
+                idx
+                for idx in my_o4_list
+                if grid[idx] == 0
+                and _creates_open_four_1d(grid, idx, player, win_len, block_two, dirs)
+            ]
+            if len(valid_my_o4) != len(my_o4_list):
+                my_o4_list[:] = valid_my_o4
+                my_o4_set.clear()
+                my_o4_set.update(valid_my_o4)
+            if valid_my_o4:
+                return float(player * player_at_start)
+            # 4. Chặn đối thủ tạo Bốn hở hai đầu (chặn Ba hở hai đầu)
+            valid_opp_o4: list[int] = [
+                idx
+                for idx in opp_o4_list
+                if grid[idx] == 0
+                and _creates_open_four_1d(grid, idx, opp, win_len, block_two, dirs)
+            ]
+            if len(valid_opp_o4) != len(opp_o4_list):
+                opp_o4_list[:] = valid_opp_o4
+                opp_o4_set.clear()
+                opp_o4_set.update(valid_opp_o4)
+            if valid_opp_o4:
+                idx0 = valid_opp_o4[0] if len(valid_opp_o4) == 1 else rng.choice(valid_opp_o4)
+
+        if idx0 == 0:
+            # Chọn ngẫu nhiên từ tập ứng viên (L2) hoặc toàn bộ ô trống (L1)
             while pool_len > 0:
                 pick = rng.randrange(pool_len)
                 cand = pool[pick]
@@ -405,7 +594,9 @@ def _rollout_tactical_gomoku(
                 if not block_two or not (grid[bp] == opp and grid[fp] == opp):
                     return float(player * player_at_start)
 
-            if grid[bp] == 0:
+            b_open = grid[bp] == 0
+            f_open = grid[fp] == 0
+            if b_open:
                 ebp = bp - d
                 ext_b = 0
                 while grid[ebp] == player:
@@ -416,8 +607,27 @@ def _rollout_tactical_gomoku(
                         if bp not in my_set:
                             my_set.add(bp)
                             my_list.append(bp)
+                if extended_forced:
+                    has_jb = (grid[ebp] == 0 and grid[ebp - d] == player) or (
+                        f_open and grid[fp + d] == player
+                    )
+                    if seg + ext_b >= win_len - 2 or (seg + ext_b == win_len - 3 and has_jb):
+                        if bp not in my_o4_set and _creates_open_four_1d(
+                            grid, bp, player, win_len, block_two, dirs
+                        ):
+                            my_o4_set.add(bp)
+                            my_o4_list.append(bp)
+                    if grid[ebp] == 0 and (
+                        seg + ext_b >= win_len - 2
+                        or (seg + ext_b == win_len - 3 and grid[ebp - d] == player)
+                    ):
+                        if ebp not in my_o4_set and _creates_open_four_1d(
+                            grid, ebp, player, win_len, block_two, dirs
+                        ):
+                            my_o4_set.add(ebp)
+                            my_o4_list.append(ebp)
 
-            if grid[fp] == 0:
+            if f_open:
                 efp = fp + d
                 ext_f = 0
                 while grid[efp] == player:
@@ -428,6 +638,25 @@ def _rollout_tactical_gomoku(
                         if fp not in my_set:
                             my_set.add(fp)
                             my_list.append(fp)
+                if extended_forced:
+                    has_jf = (grid[efp] == 0 and grid[efp + d] == player) or (
+                        b_open and grid[bp - d] == player
+                    )
+                    if seg + ext_f >= win_len - 2 or (seg + ext_f == win_len - 3 and has_jf):
+                        if fp not in my_o4_set and _creates_open_four_1d(
+                            grid, fp, player, win_len, block_two, dirs
+                        ):
+                            my_o4_set.add(fp)
+                            my_o4_list.append(fp)
+                    if grid[efp] == 0 and (
+                        seg + ext_f >= win_len - 2
+                        or (seg + ext_f == win_len - 3 and grid[efp + d] == player)
+                    ):
+                        if efp not in my_o4_set and _creates_open_four_1d(
+                            grid, efp, player, win_len, block_two, dirs
+                        ):
+                            my_o4_set.add(efp)
+                            my_o4_list.append(efp)
 
         if use_candidates:
             in_pool[idx0] = 1
@@ -635,6 +864,7 @@ def _rollout_softmax_gomoku(
     max_moves: int | None = None,
     truncate_eval: bool = False,
     tau: float = DEFAULT_TAU,
+    extended_forced: bool = False,
 ) -> float:
     """Rollout L3 (`truncate_eval=False`) và L4 (`truncate_eval=True`) trên bàn Caro."""
     if state.is_terminal():
@@ -665,6 +895,16 @@ def _rollout_softmax_gomoku(
     wins_o_set, wins_o_list = _find_initial_wins_1d(
         grid, stones_o, PLAYER_O, win_len, block_two, dirs
     )
+    if extended_forced:
+        o4_x_set, o4_x_list = _find_initial_open_fours_1d(
+            grid, stones_x, PLAYER_X, win_len, block_two, dirs
+        )
+        o4_o_set, o4_o_list = _find_initial_open_fours_1d(
+            grid, stones_o, PLAYER_O, win_len, block_two, dirs
+        )
+    else:
+        o4_x_set, o4_x_list = set(), []
+        o4_o_set, o4_o_list = set(), []
 
     total_cells = stride * stride
     in_pool = [0] * total_cells
@@ -702,9 +942,13 @@ def _rollout_softmax_gomoku(
         if player == PLAYER_X:
             my_list, my_set = wins_x_list, wins_x_set
             opp_list, opp_set = wins_o_list, wins_o_set
+            my_o4_list, my_o4_set = o4_x_list, o4_x_set
+            opp_o4_list, opp_o4_set = o4_o_list, o4_o_set
         else:
             my_list, my_set = wins_o_list, wins_o_set
             opp_list, opp_set = wins_x_list, wins_x_set
+            my_o4_list, my_o4_set = o4_o_list, o4_o_set
+            opp_o4_list, opp_o4_set = o4_x_list, o4_x_set
 
         # 1. Thắng ngay ở lượt hiện tại
         for idx in my_list:
@@ -731,9 +975,39 @@ def _rollout_softmax_gomoku(
 
         idx0 = 0
         if valid_blocks:
+            if extended_forced and len(valid_blocks) >= 2:
+                return float(opp * player_at_start)
             idx0 = valid_blocks[0] if len(valid_blocks) == 1 else rng.choice(valid_blocks)
-        else:
-            # 3. Lấy mẫu softmax theo điểm mẫu cục bộ trên tập ứng viên
+        elif extended_forced:
+            # 3. Nước bắt buộc mở rộng B4: tạo Bốn hở hai đầu / nước đôi 4-4
+            valid_my_o4: list[int] = [
+                idx
+                for idx in my_o4_list
+                if grid[idx] == 0
+                and _creates_open_four_1d(grid, idx, player, win_len, block_two, dirs)
+            ]
+            if len(valid_my_o4) != len(my_o4_list):
+                my_o4_list[:] = valid_my_o4
+                my_o4_set.clear()
+                my_o4_set.update(valid_my_o4)
+            if valid_my_o4:
+                return float(player * player_at_start)
+            # 4. Chặn đối thủ tạo Bốn hở hai đầu (chặn Ba hở hai đầu)
+            valid_opp_o4: list[int] = [
+                idx
+                for idx in opp_o4_list
+                if grid[idx] == 0
+                and _creates_open_four_1d(grid, idx, opp, win_len, block_two, dirs)
+            ]
+            if len(valid_opp_o4) != len(opp_o4_list):
+                opp_o4_list[:] = valid_opp_o4
+                opp_o4_set.clear()
+                opp_o4_set.update(valid_opp_o4)
+            if valid_opp_o4:
+                idx0 = valid_opp_o4[0] if len(valid_opp_o4) == 1 else rng.choice(valid_opp_o4)
+
+        if idx0 == 0:
+            # Lấy mẫu softmax theo điểm mẫu cục bộ trên tập ứng viên
             idx0, pool_len = _sample_softmax_1d(
                 grid, pool, pool_len, has_r1, player, dirs, temperature, rng
             )
@@ -764,7 +1038,9 @@ def _rollout_softmax_gomoku(
                 if not block_two or not (grid[bp] == opp and grid[fp] == opp):
                     return float(player * player_at_start)
 
-            if grid[bp] == 0:
+            b_open = grid[bp] == 0
+            f_open = grid[fp] == 0
+            if b_open:
                 ebp = bp - d
                 ext_b = 0
                 while grid[ebp] == player:
@@ -775,8 +1051,27 @@ def _rollout_softmax_gomoku(
                         if bp not in my_set:
                             my_set.add(bp)
                             my_list.append(bp)
+                if extended_forced:
+                    has_jb = (grid[ebp] == 0 and grid[ebp - d] == player) or (
+                        f_open and grid[fp + d] == player
+                    )
+                    if seg + ext_b >= win_len - 2 or (seg + ext_b == win_len - 3 and has_jb):
+                        if bp not in my_o4_set and _creates_open_four_1d(
+                            grid, bp, player, win_len, block_two, dirs
+                        ):
+                            my_o4_set.add(bp)
+                            my_o4_list.append(bp)
+                    if grid[ebp] == 0 and (
+                        seg + ext_b >= win_len - 2
+                        or (seg + ext_b == win_len - 3 and grid[ebp - d] == player)
+                    ):
+                        if ebp not in my_o4_set and _creates_open_four_1d(
+                            grid, ebp, player, win_len, block_two, dirs
+                        ):
+                            my_o4_set.add(ebp)
+                            my_o4_list.append(ebp)
 
-            if grid[fp] == 0:
+            if f_open:
                 efp = fp + d
                 ext_f = 0
                 while grid[efp] == player:
@@ -787,6 +1082,25 @@ def _rollout_softmax_gomoku(
                         if fp not in my_set:
                             my_set.add(fp)
                             my_list.append(fp)
+                if extended_forced:
+                    has_jf = (grid[efp] == 0 and grid[efp + d] == player) or (
+                        b_open and grid[bp - d] == player
+                    )
+                    if seg + ext_f >= win_len - 2 or (seg + ext_f == win_len - 3 and has_jf):
+                        if fp not in my_o4_set and _creates_open_four_1d(
+                            grid, fp, player, win_len, block_two, dirs
+                        ):
+                            my_o4_set.add(fp)
+                            my_o4_list.append(fp)
+                    if grid[efp] == 0 and (
+                        seg + ext_f >= win_len - 2
+                        or (seg + ext_f == win_len - 3 and grid[efp + d] == player)
+                    ):
+                        if efp not in my_o4_set and _creates_open_four_1d(
+                            grid, efp, player, win_len, block_two, dirs
+                        ):
+                            my_o4_set.add(efp)
+                            my_o4_list.append(efp)
 
         in_pool[idx0] = 1
         for n1 in nbrs_r1[idx0]:
@@ -1264,3 +1578,213 @@ register_rollout("l1", rollout_l1)
 register_rollout("l2", rollout_l2)
 register_rollout("l3", rollout_l3)
 register_rollout("l4", rollout_l4)
+
+
+# ---------------------------------------------------------------------------
+# P4.3a (Bonus B4): Cải tiến mô phỏng — Nước bắt buộc mở rộng & Song song hóa theo gốc
+# ---------------------------------------------------------------------------
+
+
+def find_open_four_moves(
+    state: GameState,
+    player: int | None = None,
+    *,
+    use_candidates: bool = True,
+    radius: int = 2,
+) -> list[Move]:
+    """Trả về danh sách nước đi hợp lệ giúp `player` tạo Bốn hở hai đầu hoặc nước đôi 4-4 (B4).
+
+    Nếu `player` là `None`, mặc định kiểm tra cho `state.current_player()`.
+    Chỉ áp dụng cho bàn Caro có `win_length >= 4`; trên bàn nhỏ hơn (ví dụ 3×3) trả về `[]`.
+    """
+    if state.is_terminal() or not isinstance(state, Gomoku) or state.win_length < 4:
+        return []
+    target = state.current_player() if player is None else player
+    moves = state.candidate_moves(radius) if use_candidates else state.legal_moves()
+    if not moves and use_candidates:
+        moves = state.legal_moves()
+
+    stride, base_grid, cell_indices, _, dirs, _ = _gomoku_tables(state.size, 2)
+    grid, _, _ = _load_gomoku_grid(state, stride, base_grid, cell_indices)
+    win_len = state.win_length
+    block_two = state.block_two_ends
+    return [
+        mv
+        for mv in moves
+        if _creates_open_four_1d(
+            grid,
+            (mv[0] + 1) * stride + (mv[1] + 1),
+            target,
+            win_len,
+            block_two,
+            dirs,
+        )
+    ]
+
+
+def select_extended_tactical_move(
+    state: GameState,
+    rng: random.Random,
+    *,
+    use_candidates: bool = True,
+    radius: int = 2,
+) -> Move:
+    """Chọn 1 nước đi theo thứ tự nước bắt buộc mở rộng B4 (4 tầng ưu tiên chiến thuật).
+
+    Thứ tự ưu tiên:
+      1. Nước thắng ngay 1 bước (tạo 5 quân).
+      2. Nước chặn thắng ngay 1 bước của đối thủ (chặn 4).
+      3. Nước tạo Bốn hở hai đầu (`_XXXX_`) hoặc nước đôi 4-4 của người sắp đi.
+      4. Nước chặn đối thủ tạo Bốn hở hai đầu / nước đôi 4-4 (chặn Ba hở hai đầu).
+      5. Nước ngẫu nhiên trong `candidate_moves(radius)` (hoặc `legal_moves()`).
+    """
+    if state.is_terminal():
+        raise ValueError("Ván đã kết thúc, không còn nước để chọn")
+
+    player = state.current_player()
+    win_moves = find_winning_moves(state, player, use_candidates=use_candidates, radius=radius)
+    if win_moves:
+        return win_moves[0] if len(win_moves) == 1 else rng.choice(win_moves)
+
+    block_moves = find_winning_moves(state, -player, use_candidates=use_candidates, radius=radius)
+    if block_moves:
+        return block_moves[0] if len(block_moves) == 1 else rng.choice(block_moves)
+
+    my_open4 = find_open_four_moves(state, player, use_candidates=use_candidates, radius=radius)
+    if my_open4:
+        return my_open4[0] if len(my_open4) == 1 else rng.choice(my_open4)
+
+    opp_open4 = find_open_four_moves(state, -player, use_candidates=use_candidates, radius=radius)
+    if opp_open4:
+        return opp_open4[0] if len(opp_open4) == 1 else rng.choice(opp_open4)
+
+    pool = state.candidate_moves(radius) if use_candidates else state.legal_moves()
+    if not pool:
+        pool = state.legal_moves()
+    return rng.choice(pool)
+
+
+def rollout_l2_b4(
+    state: GameState,
+    rng: random.Random,
+    max_moves: int | None = None,
+    *,
+    radius: int = 2,
+) -> float:
+    """Rollout L2-B4: bổ sung nước bắt buộc mở rộng (tạo/chặn Bốn hở hai đầu và nước đôi 4-4)."""
+    if radius < 1:
+        raise ValueError(f"radius phải >= 1, nhận được {radius}")
+    if isinstance(state, Gomoku):
+        return _rollout_tactical_gomoku(
+            state,
+            rng,
+            use_candidates=True,
+            radius=radius,
+            max_moves=max_moves,
+            extended_forced=True,
+        )
+    return _rollout_tactical_generic(
+        state, rng, use_candidates=True, radius=radius, max_moves=max_moves
+    )
+
+
+def rollout_l3_b4(
+    state: GameState,
+    rng: random.Random,
+    max_moves: int | None = None,
+    *,
+    temperature: float = DEFAULT_TEMPERATURE,
+    radius: int = 2,
+) -> float:
+    """Rollout L3-B4: kết hợp nước bắt buộc mở rộng B4 với lấy mẫu softmax mẫu cục bộ."""
+    if radius < 1:
+        raise ValueError(f"radius phải >= 1, nhận được {radius}")
+    temp = _validate_positive_float("temperature", temperature)
+    if isinstance(state, Gomoku):
+        return _rollout_softmax_gomoku(
+            state,
+            rng,
+            radius=radius,
+            temperature=temp,
+            max_moves=max_moves,
+            truncate_eval=False,
+            extended_forced=True,
+        )
+    return _rollout_softmax_generic(
+        state,
+        rng,
+        radius=radius,
+        temperature=temp,
+        max_moves=max_moves,
+        truncate_eval=False,
+    )
+
+
+def rollout_l4_b4(
+    state: GameState,
+    rng: random.Random,
+    max_moves: int | None = None,
+    *,
+    cutoff_depth: int = DEFAULT_CUTOFF_DEPTH,
+    tau: float = DEFAULT_TAU,
+    temperature: float = DEFAULT_TEMPERATURE,
+    radius: int = 2,
+) -> float:
+    """Rollout L4-B4: nước bắt buộc mở rộng B4 kết hợp cắt sớm tại `d_cut` và `tanh(eval/tau)`."""
+    if radius < 1:
+        raise ValueError(f"radius phải >= 1, nhận được {radius}")
+    if isinstance(cutoff_depth, bool) or not isinstance(cutoff_depth, int) or cutoff_depth < 0:
+        raise ValueError(f"cutoff_depth phải là số nguyên >= 0, nhận được {cutoff_depth!r}")
+    temp = _validate_positive_float("temperature", temperature)
+    tau_val = _validate_positive_float("tau", tau)
+    d_cut = cutoff_depth if max_moves is None else max_moves
+
+    if isinstance(state, Gomoku):
+        return _rollout_softmax_gomoku(
+            state,
+            rng,
+            radius=radius,
+            temperature=temp,
+            max_moves=d_cut,
+            truncate_eval=True,
+            tau=tau_val,
+            extended_forced=True,
+        )
+    return _rollout_softmax_generic(
+        state,
+        rng,
+        radius=radius,
+        temperature=temp,
+        max_moves=d_cut,
+        truncate_eval=True,
+        tau=tau_val,
+    )
+
+
+register_rollout("l2_b4", rollout_l2_b4)
+register_rollout("l3_b4", rollout_l3_b4)
+register_rollout("l4_b4", rollout_l4_b4)
+
+__all__ = [
+    "DEFAULT_CUTOFF_DEPTH",
+    "DEFAULT_TAU",
+    "DEFAULT_TEMPERATURE",
+    "RootParallelMCTSAgent",
+    "evaluate_leaf_tanh",
+    "find_open_four_moves",
+    "find_winning_moves",
+    "measure_sims_per_second",
+    "rollout_l0",
+    "rollout_l1",
+    "rollout_l2",
+    "rollout_l2_b4",
+    "rollout_l3",
+    "rollout_l3_b4",
+    "rollout_l4",
+    "rollout_l4_b4",
+    "score_move_pattern",
+    "select_extended_tactical_move",
+    "select_softmax_move",
+    "select_tactical_move",
+    "shutdown_root_process_pools",
+]

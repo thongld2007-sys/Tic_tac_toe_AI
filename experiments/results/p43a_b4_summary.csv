@@ -1,0 +1,14 @@
+category,comparison,agent_after,agent_before,budget,games,wins_after,draws,losses_after,win_rate_after,wilson_ci_low,wilson_ci_high,score_after,score_before,score_diff,boot_ci_low,boot_ci_high,z_stat,p_value,significant_005,new_nodes_per_s_after,new_nodes_per_s_before,speed_ratio,ms_per_move_after,ms_per_move_before
+extended_forced_eq_iter,l2_b4_vs_l2,l2_b4,l2,iterations=200,200,170,0,30,0.85,0.7939,0.8929,0.85,0.15,0.7,0.8,0.9,13.8274,0.0,True,2355.6,4128.9,0.5705,80.61,47.96
+extended_forced_eq_iter,l3_b4_vs_l3,l3_b4,l3,iterations=200,200,149,0,51,0.745,0.6804,0.8004,0.745,0.255,0.49,0.685,0.805,7.9295,0.0,True,504.6,878.1,0.5747,374.51,222.91
+extended_forced_eq_iter,l4_b4_vs_l4,l4_b4,l4,iterations=200,200,130,0,70,0.65,0.5816,0.7127,0.65,0.35,0.3,0.58,0.715,4.4364,9e-06,True,1765.5,1626.8,1.0853,107.6,118.31
+extended_forced_eq_time,l2_b4_vs_l2,l2_b4,l2,time_s=0.08,200,149,0,51,0.745,0.6804,0.8004,0.745,0.255,0.49,0.675,0.805,7.9295,0.0,True,2761.2,4253.0,0.6492,80.66,80.33
+extended_forced_eq_time,l3_b4_vs_l3,l3_b4,l3,time_s=0.08,200,169,0,31,0.845,0.7884,0.8886,0.845,0.155,0.69,0.795,0.895,13.4478,0.0,True,956.5,1010.5,0.9466,82.02,81.59
+extended_forced_eq_time,l4_b4_vs_l4,l4_b4,l4,time_s=0.08,200,142,0,58,0.71,0.6436,0.7685,0.71,0.29,0.42,0.65,0.77,6.5286,0.0,True,2375.4,2246.9,1.0572,80.49,80.56
+extended_forced_vs_l0,l2_b4_vs_l0_ref_l2,l2_b4_vs_l0,l2_vs_l0,iterations=200,200,189,0,11,0.945,0.9042,0.969,0.945,0.805,0.14,0.91,0.975,4.3205,1.6e-05,True,2646.9,4449.4,0.5949,72.13,43.25
+extended_forced_vs_l0,l3_b4_vs_l0_ref_l3,l3_b4_vs_l0,l3_vs_l0,iterations=200,200,186,0,14,0.93,0.8859,0.9578,0.93,0.83,0.1,0.895,0.965,3.1066,0.001893,True,709.1,1006.1,0.7048,271.94,191.46
+extended_forced_vs_l0,l4_b4_vs_l0_ref_l4,l4_b4_vs_l0,l4_vs_l0,iterations=200,200,196,0,4,0.98,0.9497,0.9922,0.98,0.955,0.025,0.96,0.995,1.4098,0.15859,False,2322.3,2098.3,1.1068,82.29,91.14
+root_parallel_eq_time,rootpar_k2_vs_k1_time004,rootpar_k2_l2_b4,rootpar_k1_l2_b4,time_s=0.04,200,118,0,82,0.59,0.5208,0.6558,0.59,0.41,0.18,0.52,0.66,2.5814,0.009841,True,7508.4,3856.1,1.9472,41.24,40.35
+root_parallel_per_worker_iter,rootpar_k2_vs_k1_iter120,rootpar_k2_l2_b4,rootpar_k1_l2_b4,iterations=120/worker,200,125,0,75,0.625,0.5561,0.6891,0.625,0.375,0.25,0.555,0.695,3.6423,0.00027,True,6477.3,3375.1,1.9192,35.85,34.63
+root_parallel_eq_time,rootpar_k4_vs_k1_time004,rootpar_k4_l2_b4,rootpar_k1_l2_b4,time_s=0.04,200,123,0,77,0.615,0.546,0.6797,0.615,0.385,0.23,0.545,0.685,3.3339,0.000856,True,13646.7,3583.5,3.8082,41.89,40.38
+root_parallel_per_worker_iter,rootpar_k4_vs_k1_iter120,rootpar_k4_l2_b4,rootpar_k1_l2_b4,iterations=120/worker,200,143,0,57,0.715,0.6488,0.773,0.715,0.285,0.43,0.65,0.78,6.7188,0.0,True,12126.5,3299.4,3.6754,38.43,35.57

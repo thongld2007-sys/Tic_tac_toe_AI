@@ -14,18 +14,26 @@ from experiments.run import normalize_config, run_experiment, summarize
 from src.agents.base import Budget
 from src.agents.mcts import MCTSAgent, resolve_rollout
 from src.agents.rollouts import (
+    RootParallelMCTSAgent,
+    _creates_open_four_1d,
+    _find_initial_open_fours_1d,
     _find_initial_wins_1d,
     _gomoku_tables,
     _load_gomoku_grid,
     evaluate_leaf_tanh,
+    find_open_four_moves,
     find_winning_moves,
     measure_sims_per_second,
     rollout_l0,
     rollout_l1,
     rollout_l2,
+    rollout_l2_b4,
     rollout_l3,
+    rollout_l3_b4,
     rollout_l4,
+    rollout_l4_b4,
     score_move_pattern,
+    select_extended_tactical_move,
     select_softmax_move,
     select_tactical_move,
 )
@@ -469,3 +477,151 @@ matchups:
     assert len(summaries) == 2
     for entry in summaries:
         assert entry["score_a"] >= 0.8
+
+
+def test_find_open_four_moves_and_extended_tactical_move() -> None:
+    """P4.3a (B4): nhận diện nước tạo Bốn hở hai đầu / nước đôi 4-4 và thứ tự ưu tiên 4 tầng."""
+    # Ba hở hai đầu ngang: X tại (4,3), (4,4), (4,5) -> nước tạo Bốn hở là (4,2) và (4,6)
+    state = Gomoku(size=9)
+    _play_moves(state, [(4, 3), (0, 0), (4, 4), (0, 1), (4, 5), (0, 2)])
+    o4_x = find_open_four_moves(state, PLAYER_X)
+    assert set(o4_x) == {(4, 2), (4, 6)}
+
+    # Đến lượt X: ưu tiên mức 3 (tạo Bốn hở hai đầu) chọn (4, 2) hoặc (4, 6)
+    mv_x = select_extended_tactical_move(state, random.Random(1), use_candidates=True)
+    assert mv_x in {(4, 2), (4, 6)}
+
+    # Nếu X đi (8, 8) để đến lượt O: O phải chặn Ba hở của X tại (4, 2) hoặc (4, 6) (mức 4)
+    state.play((8, 8))
+    assert state.current_player() == PLAYER_O
+    mv_o = select_extended_tactical_move(state, random.Random(2), use_candidates=True)
+    assert mv_o in {(4, 2), (4, 6)}
+
+    # Kiểm tra luật chặn 2 đầu (block_two_ends=True): nếu bị O chặn tại (4, 0),
+    # đánh (4, 2) tạo (4,0)=O, (4,1)=_, (4,2..4,5)=X, (4,6)=_ nên nếu O chặn (4, 6) thì đầu (4, 1)
+    # bị kẹp giữa hai quân O ở (4, 0) và (4, 6) -> không phải Bốn hở hai đầu không thể cản;
+    # trong khi đánh (4, 6) tạo (4,1)=_, (4,2)=_, (4,3..4,6)=X, (4,7)=_, (4,8)=_ vẫn thắng chắc.
+    state_b2 = Gomoku(size=9, block_two_ends=True)
+    _play_moves(state_b2, [(4, 3), (4, 0), (4, 4), (0, 1), (4, 5), (0, 2)])
+    assert find_open_four_moves(state_b2, PLAYER_X) == [(4, 6)]
+
+    # Kiểm tra nước đôi 4-4 (Double-Four fork):
+    # X có (4,1),(4,2),(4,3) bị chặn ở (4,0) bởi O -> cần (4,4) để tạo dọa 5 tại (4,5);
+    # đồng thời X có (1,4),(2,4),(3,4) bị chặn ở (0,4) bởi O -> đánh (4,4) tạo đôi 4-4!
+    state_fork = Gomoku(size=9)
+    _play_moves(
+        state_fork,
+        [
+            (4, 1),
+            (4, 0),
+            (4, 2),
+            (0, 4),
+            (4, 3),
+            (8, 8),
+            (1, 4),
+            (8, 7),
+            (2, 4),
+            (8, 6),
+            (3, 4),
+            (8, 5),
+        ],
+    )
+    assert (4, 4) in find_open_four_moves(state_fork, PLAYER_X)
+
+
+def test_find_initial_open_fours_1d_matches_bruteforce() -> None:
+    """P4.3a (B4): hàm quét nhanh _find_initial_open_fours_1d khớp tuyệt đối với vét cạn."""
+    rng = random.Random(2026)
+    stride, base_grid, cell_indices, _, dirs, _ = _gomoku_tables(9, 2)
+    for trial in range(40):
+        state = Gomoku(size=9, block_two_ends=(trial % 2 == 1))
+        n_plies = rng.randint(6, 26)
+        for _ in range(n_plies):
+            if state.is_terminal():
+                break
+            state.play(rng.choice(state.legal_moves()))
+        grid, stones_x, stones_o = _load_gomoku_grid(state, stride, base_grid, cell_indices)
+        for player, stones in ((PLAYER_X, stones_x), (PLAYER_O, stones_o)):
+            fast_set, fast_list = _find_initial_open_fours_1d(
+                grid, stones, player, state.win_length, state.block_two_ends, dirs
+            )
+            assert len(fast_set) == len(fast_list)
+            brute_set = {
+                idx
+                for idx in cell_indices
+                if grid[idx] == 0
+                and _creates_open_four_1d(
+                    grid, idx, player, state.win_length, state.block_two_ends, dirs
+                )
+            }
+            assert fast_set == brute_set
+
+
+def test_b4_rollouts_registered_and_solve_open_three_trap() -> None:
+    """P4.3a (B4): l2_b4, l3_b4, l4_b4 đăng ký đúng và giúp MCTS chặn bẫy Ba hở hai đầu."""
+    for name, expected_fn in (
+        ("l2_b4", rollout_l2_b4),
+        ("l3_b4", rollout_l3_b4),
+        ("l4_b4", rollout_l4_b4),
+    ):
+        label, fn = resolve_rollout(name)
+        assert label == name
+        assert fn is expected_fn
+
+    # Thế cờ Gomoku9_open_three: O đã có Ba hở hai đầu tại (4,3)-(4,4)-(4,5);
+    # đến lượt X phải chặn tại (4,2) hoặc (4,6).
+    trap = Gomoku(size=9)
+    _play_moves(
+        trap,
+        [(2, 2), (4, 3), (3, 2), (4, 4), (6, 6), (4, 5)],
+    )
+    assert trap.current_player() == PLAYER_X
+    agent_b4 = MCTSAgent(rollout="l4_b4", c=1.0, seed=42)
+    mv = agent_b4.select_move(trap, Budget(iterations=60))
+    assert mv in {(4, 2), (4, 6)}
+
+
+def test_root_parallel_mcts_agent_workers_and_split_modes() -> None:
+    """P4.3a (B4): RootParallelMCTSAgent hỗ trợ song song hóa theo gốc (thread & process)."""
+    state = Gomoku(size=9)
+    _play_moves(state, [(2, 2), (4, 3), (3, 2), (4, 4), (6, 6), (4, 5)])
+
+    # K=1 tương đương MCTS đơn luồng
+    ag_k1 = RootParallelMCTSAgent(num_workers=1, rollout="l2_b4", c=1.0, seed=10)
+    mv1 = ag_k1.select_move(state, Budget(iterations=40))
+    assert mv1 in state.legal_moves()
+    assert ag_k1.last_stats["nodes"] > 1
+    assert len(ag_k1.last_stats["root"]) > 0
+
+    # K=2 với executor="thread", split_iterations=False (mỗi worker chạy 40 iterations -> tổng ~80)
+    ag_k2_thread = RootParallelMCTSAgent(
+        num_workers=2,
+        rollout="l2_b4",
+        c=1.0,
+        seed=10,
+        executor="thread",
+        split_iterations=False,
+    )
+    mv2 = ag_k2_thread.select_move(state, Budget(iterations=40))
+    assert mv2 in state.legal_moves()
+    total_visits_unsplit = sum(int(rs["N"]) for rs in ag_k2_thread.last_stats["root"])
+    assert total_visits_unsplit == 80
+
+    # K=2 với executor="process", split_iterations=True (chia 120 iterations -> tổng 120)
+    ag_k2_proc = RootParallelMCTSAgent(
+        num_workers=2,
+        rollout="l4_b4",
+        c=1.0,
+        seed=10,
+        executor="process",
+        split_iterations=True,
+    )
+    mv3 = ag_k2_proc.select_move(state, Budget(iterations=120))
+    assert mv3 in {(4, 2), (4, 6)}
+    total_visits_split = sum(int(rs["N"]) for rs in ag_k2_proc.last_stats["root"])
+    assert total_visits_split == 120
+
+    with pytest.raises(ValueError, match="num_workers"):
+        RootParallelMCTSAgent(num_workers=0)
+    with pytest.raises(ValueError, match="executor"):
+        RootParallelMCTSAgent(num_workers=2, executor="invalid")

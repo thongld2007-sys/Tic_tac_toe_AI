@@ -62,6 +62,14 @@ UCT_VARIANTS: tuple[str, ...] = (
 
 def compute_move_prior(state: GameState, move: Move, player: int) -> float:
     """Tính điểm ưu tiên cục bộ `H_i` trong `[0.0, 1.0]` cho cải tiến `progressive_bias` (B3)."""
+    from src.games.xiangqi import Xiangqi
+
+    if isinstance(state, Xiangqi):
+        from src.agents.xiangqi_agents import score_xiangqi_move
+
+        # Bỏ phần bù 10_000 dành cho sắp xếp nước ăn quân để tanh không bị bão hòa ở ~1.0
+        raw_xq = score_xiangqi_move(state, move, capture_bonus=0.0)
+        return math.tanh(max(0.0, raw_xq) / 6000.0)
     board = state.board
     size = int(board.shape[0])
     if size <= 3:
@@ -134,6 +142,11 @@ def resolve_rollout(rollout: str | RolloutFn) -> tuple[str, RolloutFn]:
             importlib.import_module("src.agents.rollouts")
         except ModuleNotFoundError:
             pass
+        if key not in ROLLOUT_POLICIES:
+            try:
+                importlib.import_module("src.agents.xiangqi_agents")
+            except ModuleNotFoundError:
+                pass
         if key in ROLLOUT_POLICIES:
             return key, ROLLOUT_POLICIES[key]
         allowed = sorted(ROLLOUT_POLICIES)

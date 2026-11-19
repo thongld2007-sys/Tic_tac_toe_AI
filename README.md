@@ -47,6 +47,19 @@ Mở giao diện chơi trực tiếp (Người vs AI, AI vs AI, đổi thuật t
 python -m src.ui.gui_core
 ```
 
+Mở giao diện kèm bảng phân tích MCTS (`make demo` chạy lệnh này). Tab "Bảng phân tích" hiện heatmap
+số lượt thăm `N` trên bàn cờ và bảng 5 nước đứng đầu tại gốc với `N`, `W`, `W/N`, UCT. Nút
+"Mở thế E1 và phân tích" nạp thế bẫy E1 trên bàn 3×3 và chạy MCTS ngay:
+
+```bash
+python -m src.ui.gui_panel
+```
+
+Thêm `--preset E1` để mở sẵn thế E1, `--position file.txt` để nạp thế cờ từ file, và
+`--headless-demo` để in bảng 5 nước ra terminal mà không mở cửa sổ. File thế cờ là danh sách nước
+(`moves: 0,1 0,0 2,0 1,1`, X đi trước, mỗi nước là `hàng,cột` tính từ 0) hoặc sơ đồ bàn cờ dùng
+`X`, `O`, `.`; chi tiết ở đầu file [src/ui/gui_panel.py](src/ui/gui_panel.py).
+
 ## Cấu trúc thư mục
 
 ```
@@ -105,10 +118,35 @@ python -m experiments.p43a_b4
 
 Kết quả từng ván đấu sinh từ `experiments/run.py` nằm tại `experiments/results/p43a_b4_9x9.csv` (2.400 ván) và `experiments/results/p43a_b4_rootpar_9x9.csv` (800 ván); bảng tổng hợp điểm trước/sau (kèm khoảng tin cậy Wilson 95%, bootstrap 95% và kiểm định $z$) nằm tại `experiments/results/p43a_b4_summary.csv`; bảng tốc độ mô phỏng (`rollout_sims_per_s`, `mcts_sims_per_s`) và tỷ lệ giải bẫy Ba hở hai đầu trước/sau trên bàn 9×9 và 15×15 nằm tại `experiments/results/p43a_b4_speed.csv` (lưu ý: ở chế độ `split_total_iter`, mỗi cây con chỉ có kích thước $1/K$ nên chi phí duyệt cây nông hơn, giúp hệ số tăng tốc `mcts_speed_ratio` trên bàn 15×15 có thể vượt nhẹ $K$).
 
+## Cờ tướng (P4.1b, P4.2b)
+
+`src/games/xiangqi.py` cài luật cờ tướng theo cùng interface `GameState` nên MCTS và runner dùng
+được ngay (`game: {type: xiangqi, max_plies: 300}`). Một nước đi là cặp `(ô đi, ô đến)` với ô
+đánh số `hàng * 9 + cột`; `parse_iccs("h2e2")` và `move_to_iccs` đổi sang ký hiệu ICCS. Bên hết
+nước hợp lệ thì thua; hòa khi 120 nước liền không ăn quân, lặp thế ba lần hoặc chạm `max_plies`.
+
+Kiểm tra bộ sinh nước bằng perft (số nút lá của cây nước hợp lệ). Thế ban đầu cho 44, 1 920,
+79 666 và 3 290 240 nút ở độ sâu 1–4, khớp số tham chiếu:
+
+```bash
+python -m src.games.xiangqi --perft 4
+```
+
+Thêm `--fen "<FEN>"` để đếm từ thế khác và `--divide` để tách số nút theo từng nước đầu.
+
+Hai agent cờ tướng (`src/agents/xiangqi_agents.py`, P4.2b) gồm `AlphaBetaXiangqi` (lượng giá vật
+chất + bảng vị trí PST, MVV-LVA, Quiescence Search, Iterative Deepening và Zobrist TT) và
+`XiangqiMCTSAgent` (MCTS-UCT với Rollout L4 `xiangqi_l4` cắt sớm bằng `tanh(eval / tau)`). Kiểm
+chứng tỷ lệ thắng của cả hai agent trước `RandomAgent`:
+
+```bash
+python -m experiments.run configs/p42b_xiangqi_vs_random.yaml --workers 8
+```
+
 ## Đóng góp
 
 | Thành viên | Mã việc |
 | --- | --- |
-| TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a, P3.1b |
-| TV2 | P1.2, P2.2a, P2.2b, P3.2a, P3.2b, P4.2a, P6.2 |
+| TV1 | P6.1a, P1.1a, P1.1b, P1.1c, P2.1, P3.1a, P3.1b, P6.1b, P4.1a, P4.1b |
+| TV2 | P1.2, P2.2a, P2.2b, P3.2a, P3.2b, P4.2a, P4.2b, P6.2 |
 | TV3 | P1.3a, P1.3b, P2.3a, P2.3b, P4.3a, P5.3a |

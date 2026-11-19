@@ -15,7 +15,7 @@ Cấu hình YAML
     swap_first: true               # true: ván chẵn A đi trước, ván lẻ B đi trước
     opening_plies: 0               # số nước mở đầu ngẫu nhiên (lấy từ candidate_moves)
     workers: 4                     # số tiến trình; bỏ trống thì dùng số CPU - 1
-    game: {type: gomoku, size: 9}  # hoặc {type: tictactoe}
+    game: {type: gomoku, size: 9}  # hoặc {type: tictactoe}, {type: xiangqi, max_plies: 300}
     matchups:
       - a: {type: mcts, c: [0.5, 1.4], budget: {iterations: [100, 1000]}}
         b: {type: random}
@@ -62,9 +62,11 @@ from src.agents.mcts import MCTSAgent
 from src.agents.mcts_parallel import RootParallelMCTSAgent
 from src.agents.minimax import MinimaxAgent
 from src.agents.random_agent import RandomAgent
+from src.agents.xiangqi_agents import AlphaBetaXiangqi, XiangqiMCTSAgent
 from src.games.base import PLAYER_O, PLAYER_X, GameState
 from src.games.gomoku import Gomoku
 from src.games.tictactoe import TicTacToe
+from src.games.xiangqi import Xiangqi
 
 RESULTS_DIR = Path("experiments") / "results"
 
@@ -135,6 +137,11 @@ def _build_gomoku(params: Mapping[str, Any]) -> GameState:
     return Gomoku(**params)
 
 
+def _build_xiangqi(params: Mapping[str, Any]) -> GameState:
+    _check_params("game xiangqi", params, ("fen", "no_capture_limit", "max_plies"))
+    return Xiangqi(**params)
+
+
 def _build_random(params: Mapping[str, Any], seed: int) -> Agent:
     _check_params("agent random", params, ())
     return RandomAgent(seed=seed)
@@ -203,9 +210,38 @@ def _build_mcts_parallel(params: Mapping[str, Any], seed: int) -> Agent:
     return RootParallelMCTSAgent(seed=seed, **params)
 
 
+ALPHABETA_XIANGQI_PARAMS = (
+    "default_depth",
+    "quiescence_depth",
+    "use_move_ordering",
+    "use_iterative_deepening",
+    "use_tt",
+)
+
+
+def _build_alphabeta_xiangqi(params: Mapping[str, Any], seed: int) -> Agent:
+    _check_params("agent alphabeta_xiangqi", params, ALPHABETA_XIANGQI_PARAMS)
+    return AlphaBetaXiangqi(**params)
+
+
+MCTS_XIANGQI_PARAMS = (
+    "c",
+    "selection",
+    "rollout_depth",
+    "reuse_tree",
+    "uct_variant",
+)
+
+
+def _build_mcts_xiangqi(params: Mapping[str, Any], seed: int) -> Agent:
+    _check_params("agent mcts_xiangqi", params, MCTS_XIANGQI_PARAMS)
+    return XiangqiMCTSAgent(seed=seed, **params)
+
+
 GAME_BUILDERS: dict[str, GameBuilder] = {
     "tictactoe": _build_tictactoe,
     "gomoku": _build_gomoku,
+    "xiangqi": _build_xiangqi,
 }
 
 # Muốn thêm agent mới (ví dụ Alpha-Beta caro, MCTS với rollout khác) thì thêm một dòng ở đây.
@@ -215,8 +251,10 @@ AGENT_BUILDERS: dict[str, AgentBuilder] = {
     "minimax": _build_minimax,
     "alphabeta": _build_alphabeta,
     "alphabeta_gomoku": _build_alphabeta_gomoku,
+    "alphabeta_xiangqi": _build_alphabeta_xiangqi,
     "mcts": _build_mcts,
     "mcts_parallel": _build_mcts_parallel,
+    "mcts_xiangqi": _build_mcts_xiangqi,
 }
 
 

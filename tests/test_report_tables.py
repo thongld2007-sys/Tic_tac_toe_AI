@@ -61,3 +61,25 @@ def test_main_writes_both_tables(tmp_path: Path, capsys: pytest.CaptureFixture[s
     assert r"natural order & 18\,297 & 96.7\%" in t1
     assert (tmp_path / "T3.tex").exists()
     assert "z=3.04" in capsys.readouterr().out
+
+
+def test_result_tables_are_generated_from_csv(tmp_path: Path) -> None:
+    from experiments.report_tables import write_result_tables
+
+    written = write_result_tables(tmp_path)
+    assert set(written) == {"T2.tex", "T4.tex", "T5.tex", "B2B3.tex", "T6.tex", "T7.tex", "B4.tex"}
+    for name in written:
+        tex = (tmp_path / name).read_text(encoding="utf-8")
+        assert tex.count(r"\begin{tabular}") == 1
+        assert "\t" not in tex
+    t7 = (tmp_path / "T7.tex").read_text(encoding="utf-8")
+    assert "100/0/0 & 50/50 & 50/50" in t7
+    t2 = (tmp_path / "T2.tex").read_text(encoding="utf-8")
+    assert "No pattern move ordering & 0/0/50" in t2
+
+
+def test_comparison_label() -> None:
+    from experiments.report_tables import comparison_label
+
+    assert comparison_label("l2_b4") == "L2-B4"
+    assert comparison_label("rootpar_k4_l2_b4") == "$K=4$"

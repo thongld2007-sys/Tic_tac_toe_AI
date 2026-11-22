@@ -1,5 +1,16 @@
 % Owner: TV3 (P5.3b) -- Reviewer: TV1
-\subsection{Alpha-Beta Pruning and Pattern-Based Evaluation}
+\subsection{Alpha-Beta Pruning and the Pattern Evaluation for Gomoku}
 \label{subsec:alphabeta}
 
-\textit{[TV3 -- P5.3b: alpha-beta in negamax form, the move-ordering modes on the $3\times 3$ board, candidate-move restriction within radius $r$, immediate win/block detection, the pattern-based evaluation function (five, open four, four, open three, three, open two, two), iterative deepening, and the Zobrist transposition table.]}
+\textbf{Exact search on $3\times 3$.} On Tic-Tac-Toe, Minimax and alpha-beta search to the end of the game in negamax form and return $+1$, $0$, or $-1$ from the point of view of the player to move. Alpha-beta keeps a window $(\alpha, \beta)$ and stops expanding a node as soon as one child proves that the opponent will avoid it. We compare three move orders: \emph{natural} (row-major order), \emph{random} (a seeded shuffle at every node), and \emph{heuristic}, which tries first the cells that lie on the most winning lines (the center lies on four lines, a corner on three, an edge on two).
+
+\textbf{Depth-limited search on Gomoku.} On $9\times 9$ and $15\times 15$ boards the tree cannot be searched to the end, so the Gomoku agent combines alpha-beta with five components, each of which can be switched off for the ablation in Table~T2:
+\begin{itemize}
+    \item \emph{Candidate moves}: only empty cells within Chebyshev distance $2$ of a stone are searched, and at most $16$ of them, ranked by a local pattern score, are kept at each node.
+    \item \emph{Immediate tactics}: if the player to move can complete five, that move is played; if the opponent threatens to complete five, only the blocking moves are searched.
+    \item \emph{Move ordering}: the remaining moves are sorted by the local pattern score of the move for both players, with the best move of the transposition table and two killer moves per ply tried first.
+    \item \emph{Iterative deepening}: under a time budget, the search is repeated with depth $1, 2, 3, \dots$ and the move of the last completed depth is played.
+    \item \emph{Transposition table}: values and best moves are stored under a Zobrist hash of the position, which is updated in $O(1)$ per move.
+\end{itemize}
+
+\textbf{Evaluation function.} At the horizon, a position is scored by counting line patterns for both players in all four directions. Each pattern is classified by trying to extend it: five in a row ($10^6$), an open four that cannot be stopped ($5\cdot 10^4$), a four that must be blocked at once ($10^4$), an open three ($10^3$), a closed three ($200$), an open two ($50$), and a closed two ($10$). Broken shapes such as \texttt{XX\_XX} are classified correctly because the test plays the missing stones, and segments too short to ever hold five stones are ignored. The score is the weighted count of the player's patterns minus that of the opponent.

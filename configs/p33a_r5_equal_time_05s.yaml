@@ -1,0 +1,76 @@
+# P3.3a (R5): So sánh các chính sách rollout L1–L4 ở ngân sách thời gian lớn hơn (time_s = 0.5 s/nước)
+# trên bàn Caro 9×9 để kiểm chứng kết luận khi L3 không còn bị nghẽn dưới ~100 mô phỏng/nước.
+# Tham số c = 1.0 trên thang thưởng [-1, 1] của MCTSAgent (tức c_đề = 0.5 trên thang [0, 1], theo F2).
+# Chạy: python -m experiments.run configs/p33a_r5_equal_time_05s.yaml --workers 8
+name: p33a_r5_equal_time_05s
+seed: 2026
+games: 200
+swap_first: true
+opening_plies: 2
+game:
+  type: gomoku
+  size: 9
+matchups:
+  # 1. So sánh L1–L4 cùng 0.5 s/nước trước MCTS-L0 (0.5 s/nước)
+  - a:
+      type: mcts
+      rollout: [l1, l2, l3, l4]
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 1.0
+      budget:
+        time_s: 0.5
+    b:
+      type: mcts
+      rollout: l0
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 1.0
+      budget:
+        time_s: 0.5
+  # 2. Đối đầu trực tiếp giữa các bậc chính tại 0.5 s/nước (L4 vs L3, L4 vs L2)
+  - a:
+      type: mcts
+      rollout: l4
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 1.0
+      budget:
+        time_s: 0.5
+    b:
+      type: mcts
+      rollout: l3
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 1.0
+      budget:
+        time_s: 0.5
+  - a:
+      type: mcts
+      rollout: l4
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 1.0
+      budget:
+        time_s: 0.5
+    b:
+      type: mcts
+      rollout: l2
+      selection: robust
+      use_candidates: true
+      candidate_radius: 2
+      reuse_tree: false
+      c: 1.0
+      budget:
+        time_s: 0.5
+

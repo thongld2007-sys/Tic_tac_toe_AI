@@ -33,6 +33,7 @@ Theo đề bài của giảng viên:
 - Tên tác giả viết không dấu, vì khung không nạp bộ mã font tiếng Việt.
 - Ghi chú trong ngoặc vuông in nghiêng `[TVn -- Pxx: ...]` là chỗ giữ phần chưa viết; xóa đi khi viết nội dung thật.
 - Bảng ánh xạ RQ1–RQ6 sang mã yêu cầu, bảng và hình nằm trong chú thích cuối `sections/01_introduction.tex`.
+- Các bảng số liệu nằm trong `tables/*.tex`, sinh bằng `python -m experiments.report_tables` từ gốc repo; không sửa tay các file này.
 
 ## Biên dịch trên Overleaf hoặc máy cá nhân
 

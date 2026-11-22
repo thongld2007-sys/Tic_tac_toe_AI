@@ -1,0 +1,25 @@
+# T2 (RQ2): ablation Alpha-Beta trên caro 15×15, 1 s/nước. Mỗi cặp: bản tắt một thành phần (A)
+# đấu bản đầy đủ (B), 50 ván, đổi bên đi trước, 2 nước mở đầu ngẫu nhiên dùng chung cho mỗi cặp ván.
+# Chạy: python -m experiments.run configs/p5_t2_ab_ablation.yaml --workers 15
+name: p5_t2_ab_ablation
+seed: 2026
+games: 50
+swap_first: true
+opening_plies: 2
+game: {type: gomoku, size: 15}
+matchups:
+  # Tắt use_candidates: không giới hạn nước ứng viên
+  - a: {type: alphabeta_gomoku, radius: 2, max_candidates: 16, use_candidates: false, use_immediate_tactics: true, use_move_ordering: true, use_iterative_deepening: true, use_tt: true, budget: {time_s: 1.0}}
+    b: {type: alphabeta_gomoku, radius: 2, max_candidates: 16, use_candidates: true, use_immediate_tactics: true, use_move_ordering: true, use_iterative_deepening: true, use_tt: true, budget: {time_s: 1.0}}
+  # Tắt use_immediate_tactics: không phát hiện thắng/chặn ngay
+  - a: {type: alphabeta_gomoku, radius: 2, max_candidates: 16, use_candidates: true, use_immediate_tactics: false, use_move_ordering: true, use_iterative_deepening: true, use_tt: true, budget: {time_s: 1.0}}
+    b: {type: alphabeta_gomoku, radius: 2, max_candidates: 16, use_candidates: true, use_immediate_tactics: true, use_move_ordering: true, use_iterative_deepening: true, use_tt: true, budget: {time_s: 1.0}}
+  # Tắt use_move_ordering: không sắp xếp nước theo mẫu
+  - a: {type: alphabeta_gomoku, radius: 2, max_candidates: 16, use_candidates: true, use_immediate_tactics: true, use_move_ordering: false, use_iterative_deepening: true, use_tt: true, budget: {time_s: 1.0}}
+    b: {type: alphabeta_gomoku, radius: 2, max_candidates: 16, use_candidates: true, use_immediate_tactics: true, use_move_ordering: true, use_iterative_deepening: true, use_tt: true, budget: {time_s: 1.0}}
+  # Tắt use_iterative_deepening: không làm sâu dần
+  - a: {type: alphabeta_gomoku, radius: 2, max_candidates: 16, use_candidates: true, use_immediate_tactics: true, use_move_ordering: true, use_iterative_deepening: false, use_tt: true, budget: {time_s: 1.0}}
+    b: {type: alphabeta_gomoku, radius: 2, max_candidates: 16, use_candidates: true, use_immediate_tactics: true, use_move_ordering: true, use_iterative_deepening: true, use_tt: true, budget: {time_s: 1.0}}
+  # Tắt use_tt: không dùng bảng chuyển vị
+  - a: {type: alphabeta_gomoku, radius: 2, max_candidates: 16, use_candidates: true, use_immediate_tactics: true, use_move_ordering: true, use_iterative_deepening: true, use_tt: false, budget: {time_s: 1.0}}
+    b: {type: alphabeta_gomoku, radius: 2, max_candidates: 16, use_candidates: true, use_immediate_tactics: true, use_move_ordering: true, use_iterative_deepening: true, use_tt: true, budget: {time_s: 1.0}}

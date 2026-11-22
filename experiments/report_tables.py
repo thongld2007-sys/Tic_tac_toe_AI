@@ -1,4 +1,4 @@
-"""Sinh bảng T1 và T3 cho mục VI-A của report (P5.1a), để không phải chép số tay vào LaTeX.
+"""Sinh các bảng LaTeX của report từ code và CSV kết quả, để không phải chép số tay.
 
 Chủ sở hữu: TV1.
 
@@ -14,7 +14,10 @@ Chạy từ gốc repo:
 
     python -m experiments.report_tables
 
-Đầu ra: `report/tables/T1.tex`, `report/tables/T3.tex`.
+  - T2, T4–T7, B2B3, B4: đọc các CSV tổng hợp trong `experiments/results/` (T2 cần
+    `p5_t2_ab_ablation.csv` từ `configs/p5_t2_ab_ablation.yaml`); thiếu CSV thì bỏ qua bảng đó.
+
+Đầu ra: `report/tables/*.tex`.
 """
 
 from __future__ import annotations
@@ -125,8 +128,294 @@ def two_proportion_z(w1: int, n1: int, w2: int, n2: int) -> tuple[float, float]:
     return z, math.erfc(abs(z) / math.sqrt(2.0))
 
 
+# ---------------------------------------------------------------------------
+# Các bảng kết quả còn lại (T2, T4–T7, B2/B3, B4) đọc thẳng từ CSV tổng hợp trong results/
+# ---------------------------------------------------------------------------
+
+
+def read_rows(path: Path) -> list[dict[str, str]]:
+    with path.open(encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+def pct(x: float | str, digits: int = 1) -> str:
+    return f"{100.0 * float(x):.{digits}f}"
+
+
+def ci_cell(rate: float | str, low: float | str, high: float | str) -> str:
+    """Tỷ lệ phần trăm kèm khoảng tin cậy, ví dụ "85.0 [79.4, 89.3]"."""
+    return f"{pct(rate)} [{pct(low)}, {pct(high)}]"
+
+
+def per_move(rows: Sequence[dict[str, str]], side: str) -> float:
+    """Số nút trung bình mỗi nước của bên `side` ("a" hoặc "b") trên các ván `rows`."""
+    nodes = sum(float(r[f"{side}_nodes"]) for r in rows)
+    moves = sum(int(r[f"{side}_moves"]) for r in rows)
+    return nodes / max(1, moves)
+
+
+def tabular(align: str, header: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
+    """Bảng booktabs; dòng nào là chuỗi "--midrule" thì in \\midrule."""
+    out = [HEADER, f"\\begin{{tabular}}{{{align}}}\n\\toprule\n", " & ".join(header) + " \\\\\n"]
+    out.append("\\midrule\n")
+    for row in rows:
+        if row == ("--midrule",):
+            out.append("\\midrule\n")
+        else:
+            out.append(" & ".join(row) + " \\\\\n")
+    out.append("\\bottomrule\n\\end{tabular}\n")
+    return "".join(out)
+
+
+ABLATION_LABELS = {
+    "use_candidates": "No candidate restriction",
+    "use_immediate_tactics": "No win/block detection",
+    "use_move_ordering": "No pattern move ordering",
+    "use_iterative_deepening": "No iterative deepening",
+    "use_tt": "No transposition table",
+}
+
+
+def render_t2(path: Path) -> str:
+    """T2: mỗi bản Alpha-Beta tắt một thành phần (A) đấu bản đầy đủ (B), 1 s/nước, 15×15."""
+    groups: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for r in read_rows(path):
+        params = json.loads(r["a_params"])
+        off = next(k for k in ABLATION_LABELS if params.get(k) is False)
+        groups[off].append(r)
+    rows = []
+    for key, label in ABLATION_LABELS.items():
+        games = groups.get(key, [])
+        if not games:
+            continue
+        n = len(games)
+        wins = sum(r["winner"] == "a" for r in games)
+        losses = sum(r["winner"] == "b" for r in games)
+        lo, hi = wilson(wins, n)
+        rows.append(
+            (
+                label,
+                f"{wins}/{n - wins - losses}/{losses}",
+                ci_cell(wins / n, lo, hi),
+                fmt(per_move(games, "a")),
+                fmt(per_move(games, "b")),
+            )
+        )
+    return tabular(
+        "lrrrr",
+        ("Variant (A)", "W/D/L", "Win \\% [95\\% CI]", "Nodes/move A", "Nodes/move full"),
+        rows,
+    )
+
+
+def wilson(successes: int, n: int, z: float = 1.959963984540054) -> tuple[float, float]:
+    if n == 0:
+        return 0.0, 1.0
+    p = successes / n
+    denom = 1.0 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    return max(0.0, centre - half), min(1.0, centre + half)
+
+
+T4_POSITIONS = {
+    "E1_trap": "E1 trap ($3\\times 3$)",
+    "3x3_diagonal_fork": "Diagonal fork ($3\\times 3$)",
+    "Gomoku9_open_three": "Open three ($9\\times 9$)",
+}
+
+
+def render_t4(path: Path) -> str:
+    """T4: tỷ lệ chọn đúng nước tối ưu của 3 quy tắc chọn nước cuối trên 200 seed mỗi thế."""
+    seen: dict[str, dict[str, str]] = {}
+    for r in read_rows(path):
+        seen.setdefault(r["position"], r)
+    rows = []
+    for key, label in T4_POSITIONS.items():
+        r = seen[key]
+        rows.append(
+            (
+                label,
+                r["iterations"],
+                pct(r["robust_opt_rate_200"]),
+                pct(r["max_opt_rate_200"]),
+                pct(r["max_robust_opt_rate_200"]),
+                pct(r["disagree_rate_200"]),
+            )
+        )
+    return tabular(
+        "lrrrrr",
+        ("Position", "Iter.", "Robust", "Max", "Max-robust", "Disagree"),
+        rows,
+    )
+
+
+def render_t5(path: Path) -> str:
+    """T5: điểm của MCTS với từng quy tắc chọn nước trước đối thủ chuẩn, theo ngân sách."""
+    data: dict[tuple[str, str], dict[str, dict[str, str]]] = defaultdict(dict)
+    for r in read_rows(path):
+        if r["category"] == "vs_baseline":
+            data[(r["board"], r["iterations"])][r["selection_a"]] = r
+    rows: list[tuple[str, ...]] = []
+    for board in ("3x3", "9x9"):
+        if rows:
+            rows.append(("--midrule",))
+        keys = sorted((k for k in data if k[0] == board), key=lambda k: int(k[1]))
+        for key in keys:
+            cells = data[key]
+            # 3×3 đấu Minimax hoàn hảo nên không thể thắng: báo tỷ lệ không thua.
+            # 9×9 đấu MCTS chuẩn: báo tỷ lệ thắng.
+            col = "non_loss_rate" if board == "3x3" else "win_rate"
+            rows.append(
+                (
+                    "$3\\times 3$" if board == "3x3" else "$9\\times 9$",
+                    key[1],
+                    *(pct(cells[s][col]) for s in ("robust", "max", "max_robust")),
+                )
+            )
+    return tabular("lrrrr", ("Board", "Iter.", "Robust", "Max", "Max-robust"), rows)
+
+
+B2B3_VARIANTS = (
+    ("standard", "Standard"),
+    ("no_sqrt", "No square root"),
+    ("no_log", "No logarithm"),
+    ("sqrt_n", "$\\sqrt{N_p}$ bonus"),
+    ("ucb1_tuned", "UCB1-Tuned"),
+    ("progressive_bias", "Progressive bias"),
+)
+
+
+def render_b2b3(path: Path) -> str:
+    """Bảng B2/B3: tỷ lệ thắng trên caro 9×9 trước MCTS chuẩn 80 iteration."""
+    data: dict[tuple[str, str], dict[str, str]] = {}
+    iters: set[int] = set()
+    for r in read_rows(path):
+        if r["board"] == "9x9" and r["category"] == "vs_baseline":
+            data[(r["variant_a"], r["iterations"])] = r
+            iters.add(int(r["iterations"]))
+    order = [str(i) for i in sorted(iters)]
+    rows = []
+    for key, label in B2B3_VARIANTS:
+        cells = []
+        for it in order:
+            r = data[(key, it)]
+            mark = "$^{*}$" if key != "standard" and float(r["vs_std_p"]) < 0.05 else ""
+            cells.append(pct(r["win_rate"]) + mark)
+        rows.append((label, *cells))
+    return tabular("l" + "r" * len(order), ("Variant", *(f"$I={i}$" for i in order)), rows)
+
+
+def render_t6(summary: Path, speed: Path) -> str:
+    """T6: tỷ lệ thắng của L1–L4 trước L0 khi cùng iteration / cùng thời gian, và tốc độ."""
+    win: dict[tuple[str, str], str] = {}
+    for r in read_rows(summary):
+        if r["category"] == "vs_l0":
+            win[(r["rollout_a"], r["mode"] + ":" + r["budget_spec"])] = pct(r["win_rate"])
+    sps: dict[tuple[str, str], float] = {}
+    for r in read_rows(speed):
+        sps[(r["rollout"], r["board"])] = float(r["rollout_sims_per_s"])
+    rows = []
+    for name in ("l0", "l1", "l2", "l3", "l4"):
+        rows.append(
+            (
+                name.upper(),
+                fmt(sps[(name, "9x9")]),
+                fmt(sps[(name, "15x15")]),
+                win.get((name, "equal_iter:200_iters"), "--") if name != "l0" else "--",
+                win.get((name, "equal_time:0.08_s"), "--") if name != "l0" else "--",
+                win.get((name, "equal_time:0.5_s"), "--") if name != "l0" else "--",
+            )
+        )
+    return tabular(
+        "lrrrrr",
+        ("Rollout", r"Sims/s $9\times 9$", r"Sims/s $15\times 15$", "200 it.", "0.08 s", "0.5 s"),
+        rows,
+    )
+
+
+def render_t7(path: Path) -> str:
+    """T7: Alpha-Beta đấu MCTS trên caro 15×15 cùng thời gian, tách theo bên đi trước."""
+    rows = []
+    for r in read_rows(path):
+        if r["first_side"] != "overall":
+            continue
+        split = {
+            x["first_side"]: x
+            for x in read_rows(path)
+            if x["matchup"] == r["matchup"] and x["first_side"] != "overall"
+        }
+        rows.append(
+            (
+                f"{float(r['time_s']):g}",
+                r["mcts_rollout"].upper(),
+                f"{r['ab_wins']}/{r['draws']}/{r['mcts_wins']}",
+                f"{split['ab_first']['ab_wins']}/{split['ab_first']['games']}",
+                f"{split['mcts_first']['ab_wins']}/{split['mcts_first']['games']}",
+                fmt(float(r["ab_nodes_per_move"])),
+                fmt(float(r["mcts_nodes_per_move"])),
+            )
+        )
+    return tabular(
+        "rlrrrrr",
+        ("s/move", "MCTS", "AB W/D/L", "AB first", "MCTS first", "AB nodes", "MCTS nodes"),
+        rows,
+    )
+
+
+def comparison_label(agent: str) -> str:
+    """Nhãn ngắn: "l2_b4" thành "L2-B4", "rootpar_k4_l2_b4" thành "$K=4$"."""
+    if agent.startswith("rootpar_k"):
+        return "$K=" + agent.split("_")[1][1:] + "$"
+    return agent.upper().replace("_", "-")
+
+
+def render_b4(path: Path) -> str:
+    """Bảng B4: rollout có nước bắt buộc mở rộng và song song hóa theo gốc."""
+    labels = {
+        "extended_forced_eq_iter": "200 iterations",
+        "extended_forced_eq_time": "0.08 s/move",
+        "root_parallel_eq_time": "0.04 s/move",
+        "root_parallel_per_worker_iter": "120 it./worker",
+    }
+    rows = []
+    for r in read_rows(path):
+        if r["category"] not in labels:
+            continue
+        rows.append(
+            (
+                f"{comparison_label(r['agent_after'])} vs {comparison_label(r['agent_before'])}",
+                labels[r["category"]],
+                ci_cell(r["win_rate_after"], r["wilson_ci_low"], r["wilson_ci_high"]),
+            )
+        )
+    return tabular("llr", ("Comparison", "Budget", "Win \\% [95\\% CI]"), rows)
+
+
+def write_result_tables(out_dir: Path) -> list[str]:
+    """Ghi các bảng T2, T4–T7, B2/B3, B4; bảng nào thiếu CSV nguồn thì bỏ qua."""
+    jobs = {
+        "T2.tex": (render_t2, (RESULTS / "p5_t2_ab_ablation.csv",)),
+        "T4.tex": (render_t4, (RESULTS / "p32b_r4_root_t4.csv",)),
+        "T5.tex": (render_t5, (RESULTS / "p32b_r4_summary_t5.csv",)),
+        "B2B3.tex": (render_b2b3, (RESULTS / "p42a_b2_b3_summary.csv",)),
+        "T6.tex": (
+            render_t6,
+            (RESULTS / "p33a_r5_summary_t6.csv", RESULTS / "p33a_r5_speed_t6.csv"),
+        ),
+        "T7.tex": (render_t7, (RESULTS / "p33b_ab_vs_mcts_t7.csv",)),
+        "B4.tex": (render_b4, (RESULTS / "p43a_b4_summary.csv",)),
+    }
+    written = []
+    for name, (fn, sources) in jobs.items():
+        if all(p.exists() for p in sources):
+            (out_dir / name).write_text(fn(*sources), encoding="utf-8")
+            written.append(name)
+    return written
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Sinh bảng T1, T3 cho report (P5.1a)")
+    parser = argparse.ArgumentParser(description="Sinh các bảng LaTeX cho report")
     parser.add_argument("--seeds", type=int, default=20, help="số seed cho thứ tự random")
     parser.add_argument("--out-dir", type=Path, default=TABLES)
     args = parser.parse_args(argv)
@@ -153,7 +442,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             n2, w2, *_ = rates[(high_c, it)]
             z, p = two_proportion_z(w1, n1, w2, n2)
             print(f"  tỷ lệ thắng c={low_c} vs c={high_c}, I={it}: z={z:.2f}, p={p:.4f}")
-    print(f"Đã ghi {args.out_dir / 'T1.tex'} và {args.out_dir / 'T3.tex'}")
+    written = ["T1.tex", "T3.tex", *write_result_tables(args.out_dir)]
+    print(f"Đã ghi vào {args.out_dir}: {', '.join(written)}")
     return 0
 
 

@@ -1,5 +1,15 @@
 % Owner: TV3 (P5.3b) -- Reviewer: TV1
-\subsection{Rollout Policies}
-\label{subsec:rollout_policies}
+\subsection{Rollout Policies and Simulation Improvements}
+\label{subsec:rollouts}
 
-\textit{[TV3 -- P5.3b: the five rollout levels on Gomoku: L0 (uniformly random), L1 (play an immediate win or block an immediate loss), L2 (L1 restricted to candidate moves near existing stones), L3 (softmax over local pattern scores), and L4 (truncate the rollout at depth $d_{\mathrm{cut}}$ and return $\tanh(\mathrm{evaluate}(s)/\tau)$). Also describe subtree reuse and the simulation improvements (bonus B4).]}
+A rollout plays from the new node to the end of the game, or to a depth limit, and returns a value in $[-1, 1]$ for the player to move at its start. We compare five policies of increasing knowledge:
+\begin{itemize}
+    \item \textbf{L0}: uniformly random legal moves until the game ends.
+    \item \textbf{L1}: if the player to move can win at once, it does so and the rollout ends; otherwise, if the opponent threatens to win at once, it blocks; otherwise it plays a random legal move.
+    \item \textbf{L2}: like L1, but the random moves are drawn only from the candidate cells near existing stones.
+    \item \textbf{L3}: like L2, but the remaining move is sampled from a softmax over the local pattern score, $P(m \mid s) \propto \exp(h(s,m)/T)$ with $T = 1$.
+    \item \textbf{L4}: L3 truncated after $d_{\mathrm{cut}} = 8$ moves; the position is then scored by the evaluation function of Section~\ref{subsec:alphabeta} as $\tanh(\mathrm{eval}(s)/\tau)$ with $\tau = 2000$, so that a value replaces the rest of the random game.
+\end{itemize}
+The Gomoku rollouts work on a flat array with a two-cell border instead of the game object, and they track the endpoints of threats incrementally, so that each move checks at most eight cells instead of rescanning the board.
+
+\textbf{Simulation improvements (bonus B4).} The \emph{extended forced moves} (L2-B4, L3-B4, L4-B4) add two tactical levels after win and block: a player that can make an open four or a double four wins the rollout at once, since such a threat cannot be stopped, and a player that faces an opponent's open three blocks it. The rollout also ends as a loss for the player to move when the opponent has two separate winning cells. \emph{Root parallelization} runs $K$ independent trees from the root in separate processes with different seeds and sums the visit counts and rewards of each root child before choosing the move.

@@ -1,9 +1,16 @@
 % Owner: TV2 (P5.2a) -- Reviewer: TV3
-\subsection{Monte Carlo Tree Search with UCT}
-\label{subsec:mcts_uct}
+\subsection{MCTS-UCT, Final-Move Selection, and UCT Variants}
+\label{subsec:mcts}
 
-\textit{[TV2 -- P5.2a: the four phases of MCTS (selection, expansion, simulation, and backpropagation with the sign flipped according to the player who just moved), the UCT formula}
-\[
-\mathrm{UCT}(i) = \frac{W_i}{N_i} + c \sqrt{\frac{\ln N_p}{N_i}},
-\]
-\textit{pseudocode, the final-move selection rules at the root, and the UCT variants and improvement (bonus B2, B3).]}
+\textbf{Core algorithm.} Each MCTS iteration has four phases. \emph{Selection} descends from the root through fully expanded nodes by choosing the child with the highest score
+\begin{equation}
+\mathrm{UCT}(i) = \frac{W_i}{N_i} + c\sqrt{\frac{\ln N_p}{N_i}},
+\label{eq:uct}
+\end{equation}
+where $N_i$ is the visit count of child $i$, $W_i$ its total reward, and $N_p$ the visit count of its parent. \emph{Expansion} adds one untried move, chosen at random. \emph{Simulation} estimates the value of the new node with a rollout policy (Section~\ref{subsec:rollouts}). \emph{Backpropagation} adds the result to $W$ and $N$ of every node on the path, flipping its sign at each level, so that $W_i$ is always counted for the player who made the move into node $i$. The budget is a number of iterations, a time limit per move, or both. On Gomoku the expansion is restricted to the candidate moves of Section~\ref{subsec:alphabeta}, and the subtree of the actual reply can be reused at the next move.
+
+\textbf{Final-move selection.} After the budget is spent, the move is chosen among the children of the root by one of three rules: \emph{robust} (the most visited child, $\arg\max N_i$), \emph{max} (the highest mean, $\arg\max W_i/N_i$), and \emph{max-robust}, which plays the child that maximizes both when they agree and otherwise the child with the highest lower confidence bound $W_i/N_i - c/\sqrt{N_i}$.
+
+\textbf{UCT variants (bonus B2).} To test which parts of~\eqref{eq:uct} matter, we replace the exploration term by $c\ln N_p/N_i$ (no square root), $c\sqrt{1/N_i}$ (no logarithm), or $c\sqrt{N_p}/(1+N_i)$ (a polynomial bonus).
+
+\textbf{UCT improvements (bonus B3).} \emph{UCB1-Tuned}~\cite{auer2002finite} scales the exploration term by an estimate of the reward variance, so that moves with consistent outcomes are explored less. Our version uses the bonus $c\sqrt{(\ln N_p/N_i)\,\min\{1,\ 2\hat\sigma_i^2 + \tfrac{1}{2}\sqrt{\ln N_p/N_i}\}}$, where $\hat\sigma_i^2 \le 1/4$ is the sample variance of the rewards of child $i$ on the $[0,1]$ scale. \emph{Progressive bias} adds a prior term $c\,H_i/(1+N_i)$, where $H_i \in [0,1]$ is a heuristic score of move $i$ (the local pattern score on Gomoku); its influence fades as the move collects visits.
